@@ -205,10 +205,14 @@ export const norwegianNames: Record<string, string> = {
   "Yemen": "Jemen",
   "Zambia": "Zambia",
   "Zimbabwe": "Zimbabwe",
-  // Omstridte områder
+  // Andre områder
   "Kosovo": "Kosovo",
   "Palestine": "Palestina",
-  "Taiwan": "Taiwan"
+  "Taiwan": "Taiwan",
+  "England": "England",
+  "Scotland": "Skottland",
+  "Wales": "Wales",
+  "Northern Ireland": "Nord-Irland"
 }
 
 function shuffleArray<T>(array: T[]): T[] {
