@@ -1,4 +1,4 @@
-const DEL_COST = 2
+const DEL_COST = 3
 const SKIP_COST = 2
 const SUB_COST = 3
 const STREAK_BIAS = 3

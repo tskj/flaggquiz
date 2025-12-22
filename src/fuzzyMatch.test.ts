@@ -82,45 +82,199 @@ describe('isCloseEnough', () => {
 })
 
 describe('isAmbiguous', () => {
-  const similarCountries = ['Mauritius', 'Mauritania', 'Mali', 'Malawi', 'Malaysia', 'Niger', 'Nigeria', 'Norge']
+  // Realistic set of Norwegian country names that could be confused
+  const allCountries = [
+    'Mauritius', 'Mauritania', 'Mali', 'Malawi', 'Malaysia',
+    'Niger', 'Nigeria', 'Norge',
+    'Guinea', 'Guinea-Bissau', 'Ekvatorial-Guinea',
+    'India', 'Indonesia',
+    'Iran', 'Irak', 'Irland',
+    'Slovenia', 'Slovakia',
+    'Sudan', 'Sør-Sudan',
+    'Nord-Korea', 'Sør-Korea',
+    'Dominica', 'Den dominikanske republikk',
+    'Republikken Kongo', 'Den demokratiske republikken Kongo',
+    'Australia', 'Østerrike'
+  ]
 
-  describe('should detect ambiguity for partial matches', () => {
-    it('maurit matches both Mauritius and Mauritania', () => {
-      expect(isAmbiguous('maurit', 'Mauritius', similarCountries)).toBe(true)
-      expect(isAmbiguous('maurit', 'Mauritania', similarCountries)).toBe(true)
+  describe('Mauritius vs Mauritania', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('mauritius', 'Mauritius', allCountries)).toBe(false)
+      expect(isAmbiguous('mauritania', 'Mauritania', allCountries)).toBe(false)
     })
 
-    it('niger matches both Niger and Nigeria', () => {
-      expect(isAmbiguous('niger', 'Niger', similarCountries)).toBe(false) // exact match for Niger
-      expect(isAmbiguous('niger', 'Nigeria', similarCountries)).toBe(true) // close to Nigeria but also matches Niger
+    it('partial "maurit" is ambiguous', () => {
+      expect(isAmbiguous('maurit', 'Mauritius', allCountries)).toBe(true)
+      expect(isAmbiguous('maurit', 'Mauritania', allCountries)).toBe(true)
     })
 
-    it('nigeri matches both Niger and Nigeria', () => {
-      expect(isAmbiguous('nigeri', 'Niger', similarCountries)).toBe(true)
-      expect(isAmbiguous('nigeri', 'Nigeria', similarCountries)).toBe(true)
+    it('typing more disambiguates', () => {
+      expect(isAmbiguous('mauriti', 'Mauritius', allCountries)).toBe(false) // only matches Mauritius
+      expect(isAmbiguous('maurita', 'Mauritania', allCountries)).toBe(false) // only matches Mauritania
     })
   })
 
-  describe('exact matches are never ambiguous', () => {
-    it('mauritius is unambiguous (exact)', () => {
-      expect(isAmbiguous('mauritius', 'Mauritius', similarCountries)).toBe(false)
+  describe('Niger vs Nigeria', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('niger', 'Niger', allCountries)).toBe(false)
+      expect(isAmbiguous('nigeria', 'Nigeria', allCountries)).toBe(false)
     })
 
-    it('mauritania is unambiguous (exact)', () => {
-      expect(isAmbiguous('mauritania', 'Mauritania', similarCountries)).toBe(false)
+    it('nigeri is ambiguous (close to both)', () => {
+      expect(isAmbiguous('nigeri', 'Nigeria', allCountries)).toBe(true)
+    })
+  })
+
+  describe('Mali vs Malawi vs Malaysia', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('mali', 'Mali', allCountries)).toBe(false)
+      expect(isAmbiguous('malawi', 'Malawi', allCountries)).toBe(false)
+      expect(isAmbiguous('malaysia', 'Malaysia', allCountries)).toBe(false)
+    })
+  })
+
+  describe('Iran vs Irak vs Irland', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('iran', 'Iran', allCountries)).toBe(false)
+      expect(isAmbiguous('irak', 'Irak', allCountries)).toBe(false)
+      expect(isAmbiguous('irland', 'Irland', allCountries)).toBe(false)
     })
 
-    it('nigeria is unambiguous (exact)', () => {
-      expect(isAmbiguous('nigeria', 'Nigeria', similarCountries)).toBe(false)
+    it('ira is ambiguous', () => {
+      expect(isAmbiguous('ira', 'Iran', allCountries)).toBe(true)
+      expect(isAmbiguous('ira', 'Irak', allCountries)).toBe(true)
+    })
+  })
+
+  describe('Slovenia vs Slovakia', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('slovenia', 'Slovenia', allCountries)).toBe(false)
+      expect(isAmbiguous('slovakia', 'Slovakia', allCountries)).toBe(false)
     })
 
-    it('niger is unambiguous (exact)', () => {
-      expect(isAmbiguous('niger', 'Niger', similarCountries)).toBe(false)
+    it('they naturally disambiguate by their different letters', () => {
+      // slova/slovak -> Slovakia only
+      expect(isCloseEnough('slova', 'Slovakia')).toBe(true)
+      expect(isCloseEnough('slova', 'Slovenia')).toBe(false)
+      // slove/sloven -> Slovenia only
+      expect(isCloseEnough('slove', 'Slovenia')).toBe(true)
+      expect(isCloseEnough('slove', 'Slovakia')).toBe(false)
+    })
+  })
+
+  describe('India vs Indonesia', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('india', 'India', allCountries)).toBe(false)
+      expect(isAmbiguous('indonesia', 'Indonesia', allCountries)).toBe(false)
     })
 
-    it('unique country names are not ambiguous', () => {
-      expect(isAmbiguous('norge', 'Norge', similarCountries)).toBe(false)
-      expect(isAmbiguous('malaysia', 'Malaysia', similarCountries)).toBe(false)
+    it('indo is too short for Indonesia', () => {
+      expect(isCloseEnough('indo', 'Indonesia')).toBe(false)
+      expect(isCloseEnough('indo', 'India')).toBe(false)
+    })
+  })
+
+  describe('Sudan vs Sør-Sudan', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('sudan', 'Sudan', allCountries)).toBe(false)
+      expect(isAmbiguous('sør-sudan', 'Sør-Sudan', allCountries)).toBe(false)
+    })
+
+    it('sørsudan without hyphen is NOT ambiguous (Sudan is too short)', () => {
+      // sørsudan only matches Sør-Sudan, not Sudan (too many extra chars)
+      expect(isCloseEnough('sørsudan', 'Sør-Sudan')).toBe(true)
+      expect(isCloseEnough('sørsudan', 'Sudan')).toBe(false)
+      expect(isAmbiguous('sørsudan', 'Sør-Sudan', allCountries)).toBe(false)
+    })
+  })
+
+  describe('Nord-Korea vs Sør-Korea', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('nord-korea', 'Nord-Korea', allCountries)).toBe(false)
+      expect(isAmbiguous('sør-korea', 'Sør-Korea', allCountries)).toBe(false)
+      expect(isAmbiguous('nordkorea', 'Nord-Korea', allCountries)).toBe(false)
+      expect(isAmbiguous('sørkorea', 'Sør-Korea', allCountries)).toBe(false)
+    })
+
+    it('korea alone is too short/ambiguous', () => {
+      // "korea" is too short for "Nord-Korea" (10 chars), fails length check
+      expect(isCloseEnough('korea', 'Nord-Korea')).toBe(false)
+    })
+  })
+
+  describe('Guinea variations', () => {
+    it('exact matches work', () => {
+      expect(isAmbiguous('guinea', 'Guinea', allCountries)).toBe(false)
+      expect(isAmbiguous('guinea-bissau', 'Guinea-Bissau', allCountries)).toBe(false)
+    })
+  })
+
+  describe('unique countries are never ambiguous', () => {
+    it('norge is unique', () => {
+      expect(isAmbiguous('norge', 'Norge', allCountries)).toBe(false)
+    })
+
+    it('australia is unique (østerrike is different enough)', () => {
+      expect(isAmbiguous('australia', 'Australia', allCountries)).toBe(false)
+    })
+  })
+})
+
+describe('isCloseEnough - realistic typing scenarios', () => {
+  describe('should accept common typos', () => {
+    it('missing double letters', () => {
+      expect(isCloseEnough('marokko', 'Marokko')).toBe(true)
+      expect(isCloseEnough('maroko', 'Marokko')).toBe(true)
+      expect(isCloseEnough('filipinene', 'Filippinene')).toBe(true)
+    })
+
+    it('missing single letter', () => {
+      expect(isCloseEnough('tysland', 'Tyskland')).toBe(true)
+      expect(isCloseEnough('frankrike', 'Frankrike')).toBe(true)
+      expect(isCloseEnough('frakrike', 'Frankrike')).toBe(true)
+    })
+
+    it('extra letter', () => {
+      expect(isCloseEnough('norgee', 'Norge')).toBe(true)
+      expect(isCloseEnough('sveriige', 'Sverige')).toBe(true)
+    })
+
+    it('minor typos in longer words', () => {
+      expect(isCloseEnough('sverig', 'Sverige')).toBe(true)
+      expect(isCloseEnough('tysklan', 'Tyskland')).toBe(true)
+    })
+  })
+
+  describe('should accept without spaces/hyphens', () => {
+    it('compound names without spaces', () => {
+      expect(isCloseEnough('srilanka', 'Sri Lanka')).toBe(true)
+      expect(isCloseEnough('newzealand', 'New Zealand')).toBe(true)
+      expect(isCloseEnough('sørafrika', 'Sør-Afrika')).toBe(true)
+      expect(isCloseEnough('saudiarabia', 'Saudi-Arabia')).toBe(true)
+    })
+
+    it('long compound names', () => {
+      expect(isCloseEnough('densentralafrikanskerepublikk', 'Den sentralafrikanske republikk')).toBe(true)
+      expect(isCloseEnough('deforentearabiskeemirater', 'De forente arabiske emirater')).toBe(true)
+    })
+  })
+
+  describe('should reject wrong countries', () => {
+    it('completely different countries', () => {
+      expect(isCloseEnough('norge', 'Sverige')).toBe(false)
+      expect(isCloseEnough('finland', 'Danmark')).toBe(false)
+      expect(isCloseEnough('japan', 'Kina')).toBe(false)
+    })
+
+    it('very different names', () => {
+      expect(isCloseEnough('østerrike', 'Australia')).toBe(false)
+    })
+  })
+
+  describe('should reject very short inputs', () => {
+    it('2-char partials rejected', () => {
+      expect(isCloseEnough('no', 'Norge')).toBe(false)
+      expect(isCloseEnough('sv', 'Sverige')).toBe(false)
     })
   })
 })
