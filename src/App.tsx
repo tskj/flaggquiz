@@ -508,21 +508,24 @@ export default function App() {
           className="w-full max-w-sm h-48 object-contain mb-4"
         />
 
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Skriv landets navn..."
-          className={`w-full max-w-sm text-white rounded-lg px-4 py-3 text-lg mb-4 focus:outline-none transition-colors duration-150 ${
-            justAnswered
-              ? 'bg-green-600 border-green-500 border-2'
-              : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
-          }`}
-          autoComplete="off"
-          autoCapitalize="off"
-        />
+        <div className="w-full max-w-sm mb-4">
+          <input
+            ref={inputRef}
+            type="text"
+            value={justAnswered ? correctAnswer : input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Skriv landets navn..."
+            className={`w-full text-white rounded-lg px-4 py-3 text-lg focus:outline-none transition-colors duration-150 ${
+              justAnswered
+                ? 'bg-green-600 border-green-500 border-2 text-center font-bold'
+                : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
+            }`}
+            autoComplete="off"
+            autoCapitalize="off"
+            readOnly={justAnswered}
+          />
+        </div>
 
         <button
           onClick={skipFlag}
