@@ -1,9 +1,23 @@
 import { describe, it, expect } from 'vitest'
 import { fuzzyMatch, isCloseEnough, isAmbiguous } from './fuzzyMatch'
-import { norwegianNames } from './App'
+import { norwegianNames, alternativeNames } from './App'
 
 // All Norwegian country names for realistic ambiguity testing
 const allNorwegianNames = Object.values(norwegianNames)
+
+describe('alternativeNames', () => {
+  it('has UK for United Kingdom', () => {
+    expect(alternativeNames['United Kingdom']).toContain('UK')
+  })
+
+  it('has Amerika for United States', () => {
+    expect(alternativeNames['United States']).toContain('Amerika')
+  })
+
+  it('has Burma for Myanmar', () => {
+    expect(alternativeNames['Myanmar']).toContain('Burma')
+  })
+})
 
 describe('fuzzyMatch', () => {
   it('returns 0 for exact matches', () => {

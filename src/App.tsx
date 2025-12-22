@@ -2,6 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import countryFlags from '../country-flags.json'
 import { isCloseEnough, isAmbiguous } from './fuzzyMatch'
 
+// Alternative names that should also be accepted
+export const alternativeNames: Record<string, string[]> = {
+  "United Kingdom": ["UK"],
+  "United States": ["Amerika", "De forente amerikanske stater"],
+  "Myanmar": ["Burma"],
+}
+
 export const norwegianNames: Record<string, string> = {
   "Afghanistan": "Afghanistan",
   "Albania": "Albania",
@@ -276,11 +283,22 @@ export default function App() {
 
   const currentCountry = currentQueue[currentIndex]
   const correctAnswer = norwegianNames[currentCountry] || currentCountry
+  const altNames = alternativeNames[currentCountry] || []
+
+  // Check if value matches the correct answer or any alternative name
+  const matchesCorrectAnswer = (value: string): boolean => {
+    // Check main name
+    if (isCloseEnough(value, correctAnswer) && !isAmbiguous(value, correctAnswer, allNorwegianNames)) {
+      return true
+    }
+    // Check alternative names (exact match, case-insensitive)
+    const normalized = value.toLowerCase().trim()
+    return altNames.some(alt => alt.toLowerCase() === normalized)
+  }
 
   const checkAnswer = (value: string) => {
     if (justAnswered) return
-    // Only accept if close enough AND not ambiguous with other countries
-    if (isCloseEnough(value, correctAnswer) && !isAmbiguous(value, correctAnswer, allNorwegianNames)) {
+    if (matchesCorrectAnswer(value)) {
       setJustAnswered(true)
       setCompletedCount(prev => prev + 1)
       setCorrectFlags(prev => new Set(prev).add(currentCountry))
