@@ -224,6 +224,7 @@ export default function App() {
   const [timeRemaining, setTimeRemaining] = useState(15 * 60)
   const [completedCount, setCompletedCount] = useState(0)
   const [round, setRound] = useState(1)
+  const [showingAnswer, setShowingAnswer] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
 
@@ -245,10 +246,24 @@ export default function App() {
   }, [quizStarted, quizFinished])
 
   useEffect(() => {
-    if (quizStarted && !quizFinished && inputRef.current) {
+    if (quizStarted && !quizFinished && !showingAnswer && inputRef.current) {
       inputRef.current.focus()
     }
-  }, [quizStarted, quizFinished, currentIndex, round])
+  }, [quizStarted, quizFinished, currentIndex, round, showingAnswer])
+
+  useEffect(() => {
+    if (!showingAnswer) return
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'Tab' || e.key === ' ') {
+        e.preventDefault()
+        skipFlag()
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [showingAnswer, currentIndex, currentQueue, skippedFlags])
 
   const startQuiz = () => {
     const allCountries = Object.keys(countryFlags)
@@ -274,10 +289,20 @@ export default function App() {
   }
 
   const skipFlag = () => {
-    moveToNext(true)
+    if (showingAnswer) {
+      setShowingAnswer(false)
+      moveToNext(true)
+    } else {
+      moveToNext(true)
+    }
+  }
+
+  const giveUp = () => {
+    setShowingAnswer(true)
   }
 
   const moveToNext = (wasSkipped: boolean) => {
+    setShowingAnswer(false)
     const newSkipped = wasSkipped
       ? [...skippedFlags, currentCountry]
       : skippedFlags
@@ -298,7 +323,14 @@ export default function App() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      checkAnswer()
+      if (showingAnswer) {
+        skipFlag()
+      } else {
+        checkAnswer()
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      skipFlag()
     }
   }
 
@@ -345,53 +377,82 @@ export default function App() {
   }
 
   const flagUrl = countryFlags[currentCountry as keyof typeof countryFlags]
-  const remainingInRound = currentQueue.length - currentIndex
-  const totalRemaining = remainingInRound + skippedFlags.length
+  const remainingInRound = currentQueue.length - currentIndex - 1
+  const skippedCount = skippedFlags.length
 
   return (
     <div className="min-h-screen bg-black flex flex-col p-4">
-      <div className="flex justify-between items-center mb-4">
-        <span className="text-white text-lg font-mono">{formatTime(timeRemaining)}</span>
-        <span className="text-gray-400">{completedCount} / {totalFlags}</span>
-      </div>
-
       <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="text-gray-500 text-sm mb-2">
-          Runde {round} - {totalRemaining} gjenstår
+        <div className="w-full max-w-sm mb-2">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-white text-xl font-mono">{formatTime(timeRemaining)}</span>
+            <span className="text-green-500 text-lg font-bold">{completedCount} riktige</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-500">Runde {round}</span>
+            <div className="flex gap-4">
+              <span className="text-gray-400">{remainingInRound} igjen</span>
+              <span className="text-yellow-500">{skippedCount} hoppet over</span>
+            </div>
+          </div>
         </div>
 
         <img
           src={flagUrl}
           alt="Flagg"
-          className="w-full max-w-sm h-48 object-contain border border-gray-700 mb-6"
+          className="w-full max-w-sm h-48 object-contain mb-4"
         />
 
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Skriv landets navn..."
-          className="w-full max-w-sm bg-gray-900 text-white border border-gray-700 rounded-lg px-4 py-3 text-lg mb-4 focus:outline-none focus:border-blue-500"
-          autoComplete="off"
-          autoCapitalize="off"
-        />
+        {showingAnswer ? (
+          <>
+            <div className="text-center mb-4">
+              <p className="text-red-400 text-lg mb-1">Svaret var:</p>
+              <p className="text-white text-2xl font-bold">{correctAnswer}</p>
+            </div>
+            <button
+              onClick={skipFlag}
+              className="w-full max-w-sm bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg"
+            >
+              Neste
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Skriv landets navn..."
+              className="w-full max-w-sm bg-gray-900 text-white border border-gray-700 rounded-lg px-4 py-3 text-lg mb-4 focus:outline-none focus:border-blue-500"
+              autoComplete="off"
+              autoCapitalize="off"
+            />
 
-        <div className="flex gap-4 w-full max-w-sm">
-          <button
-            onClick={skipFlag}
-            className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg"
-          >
-            Hopp over
-          </button>
-          <button
-            onClick={checkAnswer}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
-          >
-            Svar
-          </button>
-        </div>
+            <div className="flex gap-4 w-full max-w-sm mb-3">
+              <button
+                onClick={skipFlag}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg"
+              >
+                Hopp over <span className="text-gray-400 text-sm">(Tab)</span>
+              </button>
+              <button
+                onClick={checkAnswer}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
+              >
+                Svar
+              </button>
+            </div>
+
+            <button
+              onClick={giveUp}
+              className="text-gray-500 hover:text-gray-400 text-sm underline"
+            >
+              Gi opp
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
