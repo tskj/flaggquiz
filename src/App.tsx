@@ -7,6 +7,7 @@ export const alternativeNames: Record<string, string[]> = {
   "United Kingdom": ["UK"],
   "United States": ["Amerika", "De forente amerikanske stater"],
   "Myanmar": ["Burma"],
+  "Belarus": ["Belarus"],
 }
 
 export const norwegianNames: Record<string, string> = {
@@ -487,7 +488,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col p-4">
-      <div className="flex-1 flex flex-col items-center justify-center">
+      <div className="flex-1 flex flex-col items-center pt-2 sm:pt-8">
         <div className="w-full max-w-sm mb-2">
           <div className="flex justify-between items-center mb-1">
             <span className="text-white text-xl font-mono">{formatTime(timeRemaining)}</span>
