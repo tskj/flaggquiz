@@ -2,12 +2,55 @@ const DEL_COST = 3
 const SKIP_COST = 2
 const SUB_COST = 3
 const STREAK_BIAS = 3
+const SWAP_COST = 2  // Cost for transposing adjacent characters
+
+// Pre-process to handle adjacent transpositions (Damerau-Levenshtein style)
+function handleTranspositions(query: string, target: string): string {
+  const t = target.toLowerCase()
+
+  // Only handle transpositions when lengths match (strings are aligned)
+  if (query.length !== t.length) {
+    return query
+  }
+
+  // If query has adjacent chars that are swapped compared to target, fix them
+  const q = query.split('')
+
+  for (let i = 0; i < q.length - 1; i++) {
+    // Check if swapping q[i] and q[i+1] would match target better
+    if (i < t.length - 1) {
+      const current = q[i] + q[i + 1]
+      const swapped = q[i + 1] + q[i]
+      const targetPair = t[i] + t[i + 1]
+
+      if (swapped === targetPair && current !== targetPair) {
+        // Swap them
+        ;[q[i], q[i + 1]] = [q[i + 1], q[i]]
+      }
+    }
+  }
+
+  return q.join('')
+}
 
 export function fuzzyMatch(query: string, target: string): number {
-  const q = query.toLowerCase().trim()
+  const q_original = query.toLowerCase().trim()
   const h = target.toLowerCase().trim()
 
-  if (q === h) return 0
+  if (q_original === h) return 0
+
+  // Try with transposition correction
+  const q_fixed = handleTranspositions(q_original, h)
+  const q = q_fixed
+
+  // Calculate cost for any transpositions we fixed
+  let transpositionPenalty = 0
+  for (let i = 0; i < q_original.length; i++) {
+    if (q_original[i] !== q_fixed[i]) {
+      transpositionPenalty = SWAP_COST
+      break
+    }
+  }
 
   const q_len = q.length
   const h_len = h.length
@@ -59,7 +102,7 @@ export function fuzzyMatch(query: string, target: string): number {
     ;[dp_current, dp_previous] = [dp_previous, dp_current]
   }
 
-  return dp_previous[0] - (bias > 0 ? STREAK_BIAS : 0)
+  return dp_previous[0] - (bias > 0 ? STREAK_BIAS : 0) + transpositionPenalty
 }
 
 export function isCloseEnough(input: string, answer: string): boolean {

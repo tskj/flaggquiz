@@ -225,6 +225,25 @@ describe('isAmbiguous (with full country list)', () => {
   })
 })
 
+describe('isCloseEnough - transposed letters', () => {
+  it('accepts swapped adjacent letters', () => {
+    expect(isCloseEnough('bharain', 'Bahrain')).toBe(true)
+    expect(isCloseEnough('bharian', 'Bahrain')).toBe(true)
+    expect(isCloseEnough('bleraus', 'Belarus')).toBe(true) // er -> re swap
+  })
+
+  it('accepts common keyboard transpositions', () => {
+    expect(isCloseEnough('Bangaldesh', 'Bangladesh')).toBe(true) // ld -> dl
+    expect(isCloseEnough('Jamacia', 'Jamaica')).toBe(true) // ai -> ia
+    expect(isCloseEnough('Pakitsan', 'Pakistan')).toBe(true) // st -> ts
+  })
+
+  it('still rejects wrong countries even with transpositions', () => {
+    expect(isCloseEnough('Sveirge', 'Norge')).toBe(false)
+    expect(isCloseEnough('Dnamark', 'Finland')).toBe(false)
+  })
+})
+
 describe('isCloseEnough - realistic typing scenarios', () => {
   describe('should accept common typos', () => {
     it('missing double letters', () => {
