@@ -43,6 +43,16 @@ describe('isCloseEnough', () => {
       expect(isCloseEnough('Den sentralafrikanske repubikk', 'Den sentralafrikanske republikk')).toBe(true)
       expect(isCloseEnough('De forente arabiske emirater', 'De forente arabiske emirater')).toBe(true)
     })
+
+    it('spaces and hyphens are optional', () => {
+      expect(isCloseEnough('sørkorea', 'Sør-Korea')).toBe(true)
+      expect(isCloseEnough('saudiarabia', 'Saudi-Arabia')).toBe(true)
+      expect(isCloseEnough('nordkorea', 'Nord-Korea')).toBe(true)
+      expect(isCloseEnough('srilanka', 'Sri Lanka')).toBe(true)
+      expect(isCloseEnough('newzealand', 'New Zealand')).toBe(true)
+      expect(isCloseEnough('densentralafrikanskerepublikk', 'Den sentralafrikanske republikk')).toBe(true)
+      expect(isCloseEnough('deforentearabiskeemirater', 'De forente arabiske emirater')).toBe(true)
+    })
   })
 
   describe('should reject', () => {

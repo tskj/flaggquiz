@@ -65,8 +65,14 @@ export function fuzzyMatch(query: string, target: string): number {
 export function isCloseEnough(input: string, answer: string): boolean {
   const normalizedInput = input.toLowerCase().trim()
   const normalizedAnswer = answer.toLowerCase().trim()
+
+  // Reject if input is less than half the answer length (too short)
+  if (normalizedInput.length < normalizedAnswer.length * 0.5) {
+    return false
+  }
+
   const distance = fuzzyMatch(normalizedInput, normalizedAnswer)
-  // Allow single letter mistakes (cost 5) + more for longer words
-  const maxAllowedDistance = Math.max(5, Math.ceil(normalizedAnswer.length * 0.5))
+  // Base of 5 for single typos, plus sqrt scaling for longer names
+  const maxAllowedDistance = Math.floor(5 + Math.sqrt(normalizedAnswer.length) * 2)
   return distance <= maxAllowedDistance
 }
