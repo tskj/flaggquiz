@@ -221,6 +221,7 @@ export default function App() {
   const [timeRemaining, setTimeRemaining] = useState(15 * 60)
   const [completedCount, setCompletedCount] = useState(0)
   const [round, setRound] = useState(1)
+  const [justAnswered, setJustAnswered] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
 
@@ -265,13 +266,19 @@ export default function App() {
   const correctAnswer = norwegianNames[currentCountry] || currentCountry
 
   const checkAnswer = (value: string) => {
+    if (justAnswered) return
     if (isCloseEnough(value, correctAnswer)) {
+      setJustAnswered(true)
       setCompletedCount(prev => prev + 1)
-      moveToNext(false)
+      setTimeout(() => {
+        setJustAnswered(false)
+        moveToNext(false)
+      }, 400)
     }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (justAnswered) return
     const value = e.target.value
     setInput(value)
     checkAnswer(value)
@@ -387,7 +394,11 @@ export default function App() {
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder="Skriv landets navn..."
-          className="w-full max-w-sm bg-gray-900 text-white border border-gray-700 rounded-lg px-4 py-3 text-lg mb-4 focus:outline-none focus:border-blue-500"
+          className={`w-full max-w-sm text-white rounded-lg px-4 py-3 text-lg mb-4 focus:outline-none transition-colors duration-150 ${
+            justAnswered
+              ? 'bg-green-600 border-green-500 border-2'
+              : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
+          }`}
           autoComplete="off"
           autoCapitalize="off"
         />
