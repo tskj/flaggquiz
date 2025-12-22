@@ -10,8 +10,9 @@ describe('alternativeNames', () => {
     expect(alternativeNames['United Kingdom']).toContain('UK')
   })
 
-  it('has Amerika for United States', () => {
+  it('has Amerika and De forente amerikanske stater for United States', () => {
     expect(alternativeNames['United States']).toContain('Amerika')
+    expect(alternativeNames['United States']).toContain('De forente amerikanske stater')
   })
 
   it('has Burma for Myanmar', () => {
