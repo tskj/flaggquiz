@@ -205,14 +205,9 @@ export const norwegianNames: Record<string, string> = {
   "Yemen": "Jemen",
   "Zambia": "Zambia",
   "Zimbabwe": "Zimbabwe",
-  // Andre områder
+  // Delvis anerkjente stater
   "Kosovo": "Kosovo",
-  "Palestine": "Palestina",
   "Taiwan": "Taiwan",
-  "England": "England",
-  "Scotland": "Skottland",
-  "Wales": "Wales",
-  "Northern Ireland": "Nord-Irland"
 }
 
 // Map Norwegian names to their alternatives (for ambiguity checking)

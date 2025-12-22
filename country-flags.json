@@ -131,7 +131,6 @@
   "Oman": "https://upload.wikimedia.org/wikipedia/commons/d/dd/Flag_of_Oman.svg",
   "Pakistan": "https://upload.wikimedia.org/wikipedia/commons/3/32/Flag_of_Pakistan.svg",
   "Palau": "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Palau.svg",
-  "Palestine": "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_Palestine.svg",
   "Panama": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Flag_of_Panama.svg",
   "Papua New Guinea": "https://upload.wikimedia.org/wikipedia/commons/e/e3/Flag_of_Papua_New_Guinea.svg",
   "Paraguay": "https://upload.wikimedia.org/wikipedia/commons/2/27/Flag_of_Paraguay.svg",
@@ -195,9 +194,5 @@
   "Zambia": "https://upload.wikimedia.org/wikipedia/commons/0/06/Flag_of_Zambia.svg",
   "Zimbabwe": "https://upload.wikimedia.org/wikipedia/commons/6/6a/Flag_of_Zimbabwe.svg",
   "Kosovo": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Flag_of_Kosovo.svg",
-  "Taiwan": "https://upload.wikimedia.org/wikipedia/commons/7/72/Flag_of_the_Republic_of_China.svg",
-  "England": "https://upload.wikimedia.org/wikipedia/en/b/be/Flag_of_England.svg",
-  "Scotland": "https://upload.wikimedia.org/wikipedia/commons/1/10/Flag_of_Scotland.svg",
-  "Wales": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Flag_of_Wales.svg",
-  "Northern Ireland": "https://upload.wikimedia.org/wikipedia/commons/f/f6/Flag_of_Northern_Ireland.svg"
+  "Taiwan": "https://upload.wikimedia.org/wikipedia/commons/7/72/Flag_of_the_Republic_of_China.svg"
 }
