@@ -71,13 +71,13 @@ export function isCloseEnough(input: string, answer: string): boolean {
     return true
   }
 
-  // Reject if input is half or less of the answer length (too short)
-  if (normalizedInput.length <= normalizedAnswer.length * 0.5) {
+  // Minimum 3 chars to avoid weird matches like fi->Fiji, da->Sudan
+  if (normalizedInput.length < 3) {
     return false
   }
 
   const distance = fuzzyMatch(normalizedInput, normalizedAnswer)
-  // Stricter for short words, more lenient for longer ones (power > 1)
+  // Stricter for short words, more lenient for longer ones
   const maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 4)
   return distance <= maxAllowedDistance
 }

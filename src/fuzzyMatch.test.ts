@@ -129,7 +129,12 @@ describe('isAmbiguous (with full country list)', () => {
       expect(isAmbiguous('irland', 'Irland', allNorwegianNames)).toBe(false)
     })
 
-    it('ira is ambiguous', () => {
+    it('ira matches both Iran and Irak (close enough)', () => {
+      expect(isCloseEnough('ira', 'Iran')).toBe(true)
+      expect(isCloseEnough('ira', 'Irak')).toBe(true)
+    })
+
+    it('ira is rejected due to ambiguity, not length', () => {
       expect(isAmbiguous('ira', 'Iran', allNorwegianNames)).toBe(true)
       expect(isAmbiguous('ira', 'Irak', allNorwegianNames)).toBe(true)
     })
