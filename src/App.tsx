@@ -243,6 +243,7 @@ export default function App() {
   const [showAllResults, setShowAllResults] = useState(false)
   const [struggledFlags, setStruggledFlags] = useState<Map<string, string[]>>(new Map())
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
+  const [pendingWrongMatch, setPendingWrongMatch] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
   const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
@@ -301,7 +302,7 @@ export default function App() {
     return result[0] === 'match'
   }
 
-  const checkAnswer = (value: string) => {
+  const checkAnswer = (value: string, prevValue: string) => {
     if (justAnswered) return
     if (matchesCorrectAnswer(value)) {
       setJustAnswered(true)
@@ -312,35 +313,45 @@ export default function App() {
         setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts]))
       }
       setCurrentAttempts([])
+      setPendingWrongMatch(null)
       setTimeout(() => {
         setJustAnswered(false)
         moveToNext(false)
       }, 400)
     } else {
       // Check if input matches any other country (close enough guess at wrong country)
+      let currentMatch: string | null = null
       if (value.trim().length >= 3) {
         for (const country of Object.keys(countryFlags)) {
           if (country === currentCountry) continue
           const countryName = norwegianNames[country] || country
           const countryAltNames = alternativeNames[country] || []
-          // Track as attempt if it's an unambiguous match to a wrong country
           const result = matchAnswer(value, countryName, allNorwegianNames, countryAltNames, norwegianAlternativeNames)
           if (result[0] === 'match') {
-            if (!currentAttempts.includes(country)) {
-              setCurrentAttempts(prev => [...prev, country])
-            }
+            currentMatch = country
             break
           }
         }
       }
+
+      // Only track as attempt when user deletes/backspaces away from a match
+      // This avoids false positives from typing through a partial match
+      const isDeleting = value.length < prevValue.length
+
+      if (pendingWrongMatch && isDeleting && currentMatch !== pendingWrongMatch && !currentAttempts.includes(pendingWrongMatch)) {
+        setCurrentAttempts(prev => [...prev, pendingWrongMatch!])
+      }
+
+      setPendingWrongMatch(currentMatch)
     }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (justAnswered) return
     const value = e.target.value
+    const prevValue = input
     setInput(value)
-    checkAnswer(value)
+    checkAnswer(value, prevValue)
   }
 
   const skipFlag = () => {
@@ -369,6 +380,7 @@ export default function App() {
     }
     setInput('')
     setCurrentAttempts([])
+    setPendingWrongMatch(null)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
