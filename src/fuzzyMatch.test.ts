@@ -192,6 +192,15 @@ describe('isAmbiguous (with full country list)', () => {
       expect(isCloseEnough('sørsudan', 'Sudan')).toBe(false)
       expect(isAmbiguous('sørsudan', 'Sør-Sudan', allNorwegianNames)).toBe(false)
     })
+
+    it('typing just "Sudan" for Sør-Sudan is ambiguous', () => {
+      // "Sudan" matches both countries, so it's ambiguous when answer is Sør-Sudan
+      expect(isCloseEnough('Sudan', 'Sør-Sudan')).toBe(true)
+      expect(isCloseEnough('Sudan', 'Sudan')).toBe(true)
+      expect(isAmbiguous('Sudan', 'Sør-Sudan', allNorwegianNames)).toBe(true)
+      // But exact match for Sudan itself is fine
+      expect(isAmbiguous('Sudan', 'Sudan', allNorwegianNames)).toBe(false)
+    })
   })
 
   describe('Nord-Korea vs Sør-Korea', () => {
@@ -241,6 +250,88 @@ describe('isCloseEnough - transposed letters', () => {
   it('still rejects wrong countries even with transpositions', () => {
     expect(isCloseEnough('Sveirge', 'Norge')).toBe(false)
     expect(isCloseEnough('Dnamark', 'Finland')).toBe(false)
+  })
+})
+
+describe('isCloseEnough - more realistic misspellings', () => {
+  describe('should accept', () => {
+    it('missing single letter in middle', () => {
+      expect(isCloseEnough('Etiopa', 'Etiopia')).toBe(true)
+      expect(isCloseEnough('Indonesa', 'Indonesia')).toBe(true)
+      expect(isCloseEnough('Venezuea', 'Venezuela')).toBe(true)
+    })
+
+    it('missing double letters', () => {
+      expect(isCloseEnough('Filipinene', 'Filippinene')).toBe(true)
+      expect(isCloseEnough('Maroko', 'Marokko')).toBe(true)
+    })
+
+    it('ending variations', () => {
+      expect(isCloseEnough('Argentin', 'Argentina')).toBe(true)
+      expect(isCloseEnough('Colombian', 'Colombia')).toBe(true)
+      expect(isCloseEnough('Venezuella', 'Venezuela')).toBe(true)
+      expect(isCloseEnough('Nigeraia', 'Nigeria')).toBe(true) // extra letter at end
+    })
+
+    it('long names with typos', () => {
+      expect(isCloseEnough('Kirgistan', 'Kirgisistan')).toBe(true)
+      expect(isCloseEnough('Aserbadsjan', 'Aserbajdsjan')).toBe(true)
+    })
+  })
+
+  describe('should reject', () => {
+    it('wrong letter substitution in short words', () => {
+      expect(isCloseEnough('Sverige', 'Sveits')).toBe(false)
+      expect(isCloseEnough('Island', 'Irland')).toBe(false)
+    })
+
+    it('partial country names too short', () => {
+      expect(isCloseEnough('Guinea', 'Ekvatorial-Guinea')).toBe(false)
+      expect(isCloseEnough('Kongo', 'Republikken Kongo')).toBe(false)
+      expect(isCloseEnough('Kongo', 'Den demokratiske republikken Kongo')).toBe(false)
+    })
+
+    it('completely wrong', () => {
+      expect(isCloseEnough('Spania', 'Italia')).toBe(false)
+      expect(isCloseEnough('Egypt', 'Libya')).toBe(false)
+    })
+  })
+})
+
+describe('alternative names', () => {
+  it('should accept exact alternative names', () => {
+    expect(isCloseEnough('UK', 'UK')).toBe(true)
+    expect(isCloseEnough('Amerika', 'Amerika')).toBe(true)
+    expect(isCloseEnough('Burma', 'Burma')).toBe(true)
+  })
+
+  it('should accept fuzzy matches on alternative names', () => {
+    expect(isCloseEnough('Amerik', 'Amerika')).toBe(true)
+    expect(isCloseEnough('Bruma', 'Burma')).toBe(true) // transposition
+    expect(isCloseEnough('De forente amerikanske statene', 'De forente amerikanske stater')).toBe(true)
+  })
+
+  it('should reject inputs shorter than 3 characters', () => {
+    expect(isCloseEnough('U', 'UK')).toBe(false)
+    expect(isCloseEnough('Am', 'Amerika')).toBe(false)
+  })
+})
+
+describe('alternative names with ambiguity', () => {
+  // These test that alternative names work with the full country list
+  it('Amerika should not be ambiguous with other countries', () => {
+    expect(isCloseEnough('Amerika', 'Amerika')).toBe(true)
+    expect(isAmbiguous('Amerika', 'Amerika', allNorwegianNames)).toBe(false)
+  })
+
+  it('Burma should not be ambiguous', () => {
+    expect(isCloseEnough('Burma', 'Burma')).toBe(true)
+    expect(isAmbiguous('Burma', 'Burma', allNorwegianNames)).toBe(false)
+  })
+
+  it('UK exact match is not ambiguous', () => {
+    // UK could potentially match Ukraine if fuzzy, but exact match is fine
+    expect(isAmbiguous('UK', 'UK', allNorwegianNames)).toBe(false)
   })
 })
 
