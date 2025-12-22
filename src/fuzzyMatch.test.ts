@@ -1,9 +1,108 @@
 import { describe, it, expect } from 'vitest'
-import { fuzzyMatch, isCloseEnough, isAmbiguous } from './fuzzyMatch'
+import { fuzzyMatch, isCloseEnough, isAmbiguous, checkAnswer } from './fuzzyMatch'
 import { norwegianNames, alternativeNames } from './App'
 
 // All Norwegian country names for realistic ambiguity testing
 const allNorwegianNames = Object.values(norwegianNames)
+
+describe('checkAnswer', () => {
+  describe('exact matches', () => {
+    it('returns match for exact main name', () => {
+      expect(checkAnswer('Norge', 'Norge', allNorwegianNames)).toEqual(['match', 'Norge'])
+      expect(checkAnswer('norge', 'Norge', allNorwegianNames)).toEqual(['match', 'Norge'])
+    })
+
+    it('returns match for exact alternative name', () => {
+      expect(checkAnswer('UK', 'Storbritannia', allNorwegianNames, ['UK'])).toEqual(['match', 'UK'])
+      expect(checkAnswer('Burma', 'Myanmar', allNorwegianNames, ['Burma'])).toEqual(['match', 'Burma'])
+    })
+  })
+
+  describe('fuzzy matches', () => {
+    it('returns match for fuzzy main name', () => {
+      expect(checkAnswer('Norg', 'Norge', allNorwegianNames)).toEqual(['match', 'Norge'])
+      expect(checkAnswer('Storbritania', 'Storbritannia', allNorwegianNames)).toEqual(['match', 'Storbritannia'])
+    })
+
+    it('returns match for fuzzy alternative name', () => {
+      expect(checkAnswer('Amerik', 'De forente stater', allNorwegianNames, ['Amerika'])).toEqual(['match', 'Amerika'])
+      expect(checkAnswer('Bruma', 'Myanmar', allNorwegianNames, ['Burma'])).toEqual(['match', 'Burma'])
+    })
+  })
+
+  describe('ambiguous matches', () => {
+    it('returns ambiguous with list of matching countries', () => {
+      const result = checkAnswer('ira', 'Iran', allNorwegianNames)
+      expect(result[0]).toBe('ambiguous')
+      expect(result[1]).toContain('Iran')
+      expect(result[1]).toContain('Irak')
+    })
+
+    it('returns ambiguous for maurit matching both Mauritius and Mauritania', () => {
+      const result = checkAnswer('maurit', 'Mauritius', allNorwegianNames)
+      expect(result[0]).toBe('ambiguous')
+      expect(result[1]).toContain('Mauritius')
+      expect(result[1]).toContain('Mauritania')
+    })
+
+    it('returns ambiguous for Sudan when answer is Sør-Sudan', () => {
+      const result = checkAnswer('Sudan', 'Sør-Sudan', allNorwegianNames)
+      expect(result[0]).toBe('ambiguous')
+      expect(result[1]).toContain('Sør-Sudan')
+      expect(result[1]).toContain('Sudan')
+    })
+  })
+
+  describe('no match', () => {
+    it('returns no_match for wrong answer', () => {
+      expect(checkAnswer('Sverige', 'Norge', allNorwegianNames)).toEqual(['no_match'])
+      expect(checkAnswer('Japan', 'Kina', allNorwegianNames)).toEqual(['no_match'])
+    })
+
+    it('returns no_match for too short input', () => {
+      expect(checkAnswer('No', 'Norge', allNorwegianNames)).toEqual(['no_match'])
+      expect(checkAnswer('Ir', 'Iran', allNorwegianNames)).toEqual(['no_match'])
+    })
+
+    it('returns no_match for gibberish', () => {
+      expect(checkAnswer('asdfgh', 'Norge', allNorwegianNames)).toEqual(['no_match'])
+    })
+  })
+
+  describe('exact match bypasses ambiguity', () => {
+    it('exact Sudan for Sudan is match, not ambiguous', () => {
+      expect(checkAnswer('Sudan', 'Sudan', allNorwegianNames)).toEqual(['match', 'Sudan'])
+    })
+
+    it('exact Iran for Iran is match, not ambiguous', () => {
+      expect(checkAnswer('Iran', 'Iran', allNorwegianNames)).toEqual(['match', 'Iran'])
+    })
+  })
+
+  describe('alternative names can cause ambiguity', () => {
+    it('input matching another countrys alt name causes ambiguity', () => {
+      // Test: if you type "Nansen" and answer is "Hansen", but another country has alt "Nansen"
+      const allAltNames = { 'Nansenland': ['Nansen'] }
+      const result = checkAnswer('Nansen', 'Hansen', ['Hansen', 'Nansenland'], [], allAltNames)
+      expect(result[0]).toBe('ambiguous')
+      expect(result[1]).toContain('Hansen')
+      expect(result[1]).toContain('Nansenland')
+    })
+
+    it('typing Burm for Myanmar via Burma alt is not ambiguous with Burundi', () => {
+      // Burm matches Burma (alt for Myanmar) but not Burundi (too different)
+      const allAltNames = { 'Myanmar': ['Burma'] }
+      const result = checkAnswer('Burm', 'Myanmar', allNorwegianNames, ['Burma'], allAltNames)
+      expect(result).toEqual(['match', 'Burma'])
+    })
+
+    it('exact alt name match is never ambiguous', () => {
+      const allAltNames = { 'Myanmar': ['Burma'] }
+      const result = checkAnswer('Burma', 'Myanmar', allNorwegianNames, ['Burma'], allAltNames)
+      expect(result).toEqual(['match', 'Burma'])
+    })
+  })
+})
 
 describe('alternativeNames', () => {
   it('has UK for United Kingdom', () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import countryFlags from '../country-flags.json'
-import { isCloseEnough, isAmbiguous } from './fuzzyMatch'
+import { checkAnswer as matchAnswer } from './fuzzyMatch'
 
 // Alternative names that should also be accepted
 export const alternativeNames: Record<string, string[]> = {
@@ -215,6 +215,14 @@ export const norwegianNames: Record<string, string> = {
   "Northern Ireland": "Nord-Irland"
 }
 
+// Map Norwegian names to their alternatives (for ambiguity checking)
+const norwegianAlternativeNames: Record<string, string[]> = Object.fromEntries(
+  Object.entries(alternativeNames).map(([englishName, alts]) => [
+    norwegianNames[englishName] || englishName,
+    alts
+  ])
+)
+
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array]
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -294,13 +302,8 @@ export default function App() {
 
   // Check if value matches the correct answer or any alternative name
   const matchesCorrectAnswer = (value: string): boolean => {
-    // Check main name
-    if (isCloseEnough(value, correctAnswer) && !isAmbiguous(value, correctAnswer, allNorwegianNames)) {
-      return true
-    }
-    // Check alternative names (exact match, case-insensitive)
-    const normalized = value.toLowerCase().trim()
-    return altNames.some(alt => alt.toLowerCase() === normalized)
+    const result = matchAnswer(value, correctAnswer, allNorwegianNames, altNames, norwegianAlternativeNames)
+    return result[0] === 'match'
   }
 
   const checkAnswer = (value: string) => {
@@ -320,13 +323,14 @@ export default function App() {
       }, 400)
     } else {
       // Check if input matches any other country (close enough guess at wrong country)
-      const normalizedInput = value.toLowerCase().trim()
-      if (normalizedInput.length >= 3) {
+      if (value.trim().length >= 3) {
         for (const country of Object.keys(countryFlags)) {
           if (country === currentCountry) continue
           const countryName = norwegianNames[country] || country
+          const countryAltNames = alternativeNames[country] || []
           // Track as attempt if it's an unambiguous match to a wrong country
-          if (isCloseEnough(value, countryName) && !isAmbiguous(value, countryName, allNorwegianNames)) {
+          const result = matchAnswer(value, countryName, allNorwegianNames, countryAltNames, norwegianAlternativeNames)
+          if (result[0] === 'match') {
             if (!currentAttempts.includes(country)) {
               setCurrentAttempts(prev => [...prev, country])
             }

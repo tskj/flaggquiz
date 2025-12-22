@@ -148,3 +148,93 @@ export function isAmbiguous(input: string, correctAnswer: string, allAnswers: st
   }
   return false
 }
+
+export type MatchResult =
+  | ['no_match']
+  | ['ambiguous', string[]]
+  | ['match', string]
+
+/**
+ * Check if user input matches the correct answer for a country.
+ *
+ * @param input - The user's typed input
+ * @param correctAnswer - The correct Norwegian country name
+ * @param allAnswers - All Norwegian country names (for ambiguity detection)
+ * @param alternativeNames - Optional alternative accepted names for this country
+ * @param allAlternativeNames - Optional map of all countries' alternative names (for ambiguity detection)
+ * @returns ['match', name] if correct, ['ambiguous', countries[]] if multiple match, ['no_match'] otherwise
+ */
+export function checkAnswer(
+  input: string,
+  correctAnswer: string,
+  allAnswers: string[],
+  alternativeNames: string[] = [],
+  allAlternativeNames: Record<string, string[]> = {}
+): MatchResult {
+  const normalizedInput = input.toLowerCase().trim()
+  const normalizedCorrect = correctAnswer.toLowerCase().trim()
+
+  // Exact match with main name - always accepted
+  if (normalizedInput === normalizedCorrect) {
+    return ['match', correctAnswer]
+  }
+
+  // Exact match with alternative name - always accepted
+  for (const alt of alternativeNames) {
+    if (normalizedInput === alt.toLowerCase().trim()) {
+      return ['match', alt]
+    }
+  }
+
+  // Check fuzzy match with main answer or any alternative
+  let matchedName: string | null = null
+  if (isCloseEnough(input, correctAnswer)) {
+    matchedName = correctAnswer
+  } else {
+    for (const alt of alternativeNames) {
+      if (isCloseEnough(input, alt)) {
+        matchedName = alt
+        break
+      }
+    }
+  }
+
+  if (!matchedName) {
+    return ['no_match']
+  }
+
+  // Input fuzzy-matches - check for ambiguity with other countries
+  const ambiguousMatches: string[] = [correctAnswer]
+
+  // Check main names
+  for (const answer of allAnswers) {
+    if (answer.toLowerCase().trim() === normalizedCorrect) {
+      continue
+    }
+    if (isCloseEnough(input, answer)) {
+      ambiguousMatches.push(answer)
+    }
+  }
+
+  // Check alternative names of other countries
+  for (const [mainName, altNames] of Object.entries(allAlternativeNames)) {
+    if (mainName.toLowerCase().trim() === normalizedCorrect) {
+      continue // Skip the correct country's alternatives
+    }
+    for (const alt of altNames) {
+      if (isCloseEnough(input, alt)) {
+        // Add the main name (not the alt) to show which country it conflicts with
+        if (!ambiguousMatches.includes(mainName)) {
+          ambiguousMatches.push(mainName)
+        }
+        break
+      }
+    }
+  }
+
+  if (ambiguousMatches.length > 1) {
+    return ['ambiguous', ambiguousMatches]
+  }
+
+  return ['match', matchedName]
+}
