@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import countryFlags from '../country-flags.json'
 import { isCloseEnough, isAmbiguous } from './fuzzyMatch'
 
-const norwegianNames: Record<string, string> = {
+export const norwegianNames: Record<string, string> = {
   "Afghanistan": "Afghanistan",
   "Albania": "Albania",
   "Algeria": "Algerie",

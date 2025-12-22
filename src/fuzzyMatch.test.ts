@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { fuzzyMatch, isCloseEnough, isAmbiguous } from './fuzzyMatch'
+import { norwegianNames } from './App'
+
+// All Norwegian country names for realistic ambiguity testing
+const allNorwegianNames = Object.values(norwegianNames)
 
 describe('fuzzyMatch', () => {
   it('returns 0 for exact matches', () => {
@@ -81,82 +85,65 @@ describe('isCloseEnough', () => {
   })
 })
 
-describe('isAmbiguous', () => {
-  // Realistic set of Norwegian country names that could be confused
-  const allCountries = [
-    'Mauritius', 'Mauritania', 'Mali', 'Malawi', 'Malaysia',
-    'Niger', 'Nigeria', 'Norge',
-    'Guinea', 'Guinea-Bissau', 'Ekvatorial-Guinea',
-    'India', 'Indonesia',
-    'Iran', 'Irak', 'Irland',
-    'Slovenia', 'Slovakia',
-    'Sudan', 'Sør-Sudan',
-    'Nord-Korea', 'Sør-Korea',
-    'Dominica', 'Den dominikanske republikk',
-    'Republikken Kongo', 'Den demokratiske republikken Kongo',
-    'Australia', 'Østerrike'
-  ]
-
+describe('isAmbiguous (with full country list)', () => {
   describe('Mauritius vs Mauritania', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('mauritius', 'Mauritius', allCountries)).toBe(false)
-      expect(isAmbiguous('mauritania', 'Mauritania', allCountries)).toBe(false)
+      expect(isAmbiguous('mauritius', 'Mauritius', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('mauritania', 'Mauritania', allNorwegianNames)).toBe(false)
     })
 
     it('partial "maurit" is ambiguous', () => {
-      expect(isAmbiguous('maurit', 'Mauritius', allCountries)).toBe(true)
-      expect(isAmbiguous('maurit', 'Mauritania', allCountries)).toBe(true)
+      expect(isAmbiguous('maurit', 'Mauritius', allNorwegianNames)).toBe(true)
+      expect(isAmbiguous('maurit', 'Mauritania', allNorwegianNames)).toBe(true)
     })
 
     it('typing more disambiguates', () => {
-      expect(isAmbiguous('mauriti', 'Mauritius', allCountries)).toBe(false) // only matches Mauritius
-      expect(isAmbiguous('maurita', 'Mauritania', allCountries)).toBe(false) // only matches Mauritania
+      expect(isAmbiguous('mauriti', 'Mauritius', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('maurita', 'Mauritania', allNorwegianNames)).toBe(false)
     })
   })
 
   describe('Niger vs Nigeria', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('niger', 'Niger', allCountries)).toBe(false)
-      expect(isAmbiguous('nigeria', 'Nigeria', allCountries)).toBe(false)
+      expect(isAmbiguous('niger', 'Niger', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('nigeria', 'Nigeria', allNorwegianNames)).toBe(false)
     })
 
     it('nigeri is ambiguous (close to both)', () => {
-      expect(isAmbiguous('nigeri', 'Nigeria', allCountries)).toBe(true)
+      expect(isAmbiguous('nigeri', 'Nigeria', allNorwegianNames)).toBe(true)
     })
   })
 
   describe('Mali vs Malawi vs Malaysia', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('mali', 'Mali', allCountries)).toBe(false)
-      expect(isAmbiguous('malawi', 'Malawi', allCountries)).toBe(false)
-      expect(isAmbiguous('malaysia', 'Malaysia', allCountries)).toBe(false)
+      expect(isAmbiguous('mali', 'Mali', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('malawi', 'Malawi', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('malaysia', 'Malaysia', allNorwegianNames)).toBe(false)
     })
   })
 
   describe('Iran vs Irak vs Irland', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('iran', 'Iran', allCountries)).toBe(false)
-      expect(isAmbiguous('irak', 'Irak', allCountries)).toBe(false)
-      expect(isAmbiguous('irland', 'Irland', allCountries)).toBe(false)
+      expect(isAmbiguous('iran', 'Iran', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('irak', 'Irak', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('irland', 'Irland', allNorwegianNames)).toBe(false)
     })
 
     it('ira is ambiguous', () => {
-      expect(isAmbiguous('ira', 'Iran', allCountries)).toBe(true)
-      expect(isAmbiguous('ira', 'Irak', allCountries)).toBe(true)
+      expect(isAmbiguous('ira', 'Iran', allNorwegianNames)).toBe(true)
+      expect(isAmbiguous('ira', 'Irak', allNorwegianNames)).toBe(true)
     })
   })
 
   describe('Slovenia vs Slovakia', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('slovenia', 'Slovenia', allCountries)).toBe(false)
-      expect(isAmbiguous('slovakia', 'Slovakia', allCountries)).toBe(false)
+      expect(isAmbiguous('slovenia', 'Slovenia', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('slovakia', 'Slovakia', allNorwegianNames)).toBe(false)
     })
 
     it('they naturally disambiguate by their different letters', () => {
-      // slova/slovak -> Slovakia only
       expect(isCloseEnough('slova', 'Slovakia')).toBe(true)
       expect(isCloseEnough('slova', 'Slovenia')).toBe(false)
-      // slove/sloven -> Slovenia only
       expect(isCloseEnough('slove', 'Slovenia')).toBe(true)
       expect(isCloseEnough('slove', 'Slovakia')).toBe(false)
     })
@@ -164,11 +151,11 @@ describe('isAmbiguous', () => {
 
   describe('India vs Indonesia', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('india', 'India', allCountries)).toBe(false)
-      expect(isAmbiguous('indonesia', 'Indonesia', allCountries)).toBe(false)
+      expect(isAmbiguous('india', 'India', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('indonesia', 'Indonesia', allNorwegianNames)).toBe(false)
     })
 
-    it('indo is too short for Indonesia', () => {
+    it('indo is too short for both', () => {
       expect(isCloseEnough('indo', 'Indonesia')).toBe(false)
       expect(isCloseEnough('indo', 'India')).toBe(false)
     })
@@ -176,46 +163,44 @@ describe('isAmbiguous', () => {
 
   describe('Sudan vs Sør-Sudan', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('sudan', 'Sudan', allCountries)).toBe(false)
-      expect(isAmbiguous('sør-sudan', 'Sør-Sudan', allCountries)).toBe(false)
+      expect(isAmbiguous('sudan', 'Sudan', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('sør-sudan', 'Sør-Sudan', allNorwegianNames)).toBe(false)
     })
 
-    it('sørsudan without hyphen is NOT ambiguous (Sudan is too short)', () => {
-      // sørsudan only matches Sør-Sudan, not Sudan (too many extra chars)
+    it('sørsudan without hyphen is NOT ambiguous', () => {
       expect(isCloseEnough('sørsudan', 'Sør-Sudan')).toBe(true)
       expect(isCloseEnough('sørsudan', 'Sudan')).toBe(false)
-      expect(isAmbiguous('sørsudan', 'Sør-Sudan', allCountries)).toBe(false)
+      expect(isAmbiguous('sørsudan', 'Sør-Sudan', allNorwegianNames)).toBe(false)
     })
   })
 
   describe('Nord-Korea vs Sør-Korea', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('nord-korea', 'Nord-Korea', allCountries)).toBe(false)
-      expect(isAmbiguous('sør-korea', 'Sør-Korea', allCountries)).toBe(false)
-      expect(isAmbiguous('nordkorea', 'Nord-Korea', allCountries)).toBe(false)
-      expect(isAmbiguous('sørkorea', 'Sør-Korea', allCountries)).toBe(false)
+      expect(isAmbiguous('nord-korea', 'Nord-Korea', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('sør-korea', 'Sør-Korea', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('nordkorea', 'Nord-Korea', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('sørkorea', 'Sør-Korea', allNorwegianNames)).toBe(false)
     })
 
-    it('korea alone is too short/ambiguous', () => {
-      // "korea" is too short for "Nord-Korea" (10 chars), fails length check
+    it('korea alone is too short', () => {
       expect(isCloseEnough('korea', 'Nord-Korea')).toBe(false)
     })
   })
 
   describe('Guinea variations', () => {
     it('exact matches work', () => {
-      expect(isAmbiguous('guinea', 'Guinea', allCountries)).toBe(false)
-      expect(isAmbiguous('guinea-bissau', 'Guinea-Bissau', allCountries)).toBe(false)
+      expect(isAmbiguous('guinea', 'Guinea', allNorwegianNames)).toBe(false)
+      expect(isAmbiguous('guinea-bissau', 'Guinea-Bissau', allNorwegianNames)).toBe(false)
     })
   })
 
   describe('unique countries are never ambiguous', () => {
     it('norge is unique', () => {
-      expect(isAmbiguous('norge', 'Norge', allCountries)).toBe(false)
+      expect(isAmbiguous('norge', 'Norge', allNorwegianNames)).toBe(false)
     })
 
-    it('australia is unique (østerrike is different enough)', () => {
-      expect(isAmbiguous('australia', 'Australia', allCountries)).toBe(false)
+    it('australia is unique', () => {
+      expect(isAmbiguous('australia', 'Australia', allNorwegianNames)).toBe(false)
     })
   })
 })
