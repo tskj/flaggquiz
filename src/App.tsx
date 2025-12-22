@@ -257,7 +257,8 @@ export default function App() {
 
   useEffect(() => {
     if (quizStarted && !quizFinished && inputRef.current) {
-      inputRef.current.focus()
+      // preventScroll to avoid mobile keyboard pushing content out of view
+      inputRef.current.focus({ preventScroll: true })
     }
   }, [quizStarted, quizFinished, currentIndex, round])
 
