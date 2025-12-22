@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fuzzyMatch, isCloseEnough } from './fuzzyMatch'
+import { fuzzyMatch, isCloseEnough, isAmbiguous } from './fuzzyMatch'
 
 describe('fuzzyMatch', () => {
   it('returns 0 for exact matches', () => {
@@ -77,6 +77,50 @@ describe('isCloseEnough', () => {
       expect(isCloseEnough('dan', 'Danmark')).toBe(false)
       expect(isCloseEnough('para', 'Paraguay')).toBe(false)
       expect(isCloseEnough('P', 'Peru')).toBe(false)
+    })
+  })
+})
+
+describe('isAmbiguous', () => {
+  const similarCountries = ['Mauritius', 'Mauritania', 'Mali', 'Malawi', 'Malaysia', 'Niger', 'Nigeria', 'Norge']
+
+  describe('should detect ambiguity for partial matches', () => {
+    it('maurit matches both Mauritius and Mauritania', () => {
+      expect(isAmbiguous('maurit', 'Mauritius', similarCountries)).toBe(true)
+      expect(isAmbiguous('maurit', 'Mauritania', similarCountries)).toBe(true)
+    })
+
+    it('niger matches both Niger and Nigeria', () => {
+      expect(isAmbiguous('niger', 'Niger', similarCountries)).toBe(false) // exact match for Niger
+      expect(isAmbiguous('niger', 'Nigeria', similarCountries)).toBe(true) // close to Nigeria but also matches Niger
+    })
+
+    it('nigeri matches both Niger and Nigeria', () => {
+      expect(isAmbiguous('nigeri', 'Niger', similarCountries)).toBe(true)
+      expect(isAmbiguous('nigeri', 'Nigeria', similarCountries)).toBe(true)
+    })
+  })
+
+  describe('exact matches are never ambiguous', () => {
+    it('mauritius is unambiguous (exact)', () => {
+      expect(isAmbiguous('mauritius', 'Mauritius', similarCountries)).toBe(false)
+    })
+
+    it('mauritania is unambiguous (exact)', () => {
+      expect(isAmbiguous('mauritania', 'Mauritania', similarCountries)).toBe(false)
+    })
+
+    it('nigeria is unambiguous (exact)', () => {
+      expect(isAmbiguous('nigeria', 'Nigeria', similarCountries)).toBe(false)
+    })
+
+    it('niger is unambiguous (exact)', () => {
+      expect(isAmbiguous('niger', 'Niger', similarCountries)).toBe(false)
+    })
+
+    it('unique country names are not ambiguous', () => {
+      expect(isAmbiguous('norge', 'Norge', similarCountries)).toBe(false)
+      expect(isAmbiguous('malaysia', 'Malaysia', similarCountries)).toBe(false)
     })
   })
 })

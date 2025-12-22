@@ -66,6 +66,11 @@ export function isCloseEnough(input: string, answer: string): boolean {
   const normalizedInput = input.toLowerCase().trim()
   const normalizedAnswer = answer.toLowerCase().trim()
 
+  // Exact match always accepted
+  if (normalizedInput === normalizedAnswer) {
+    return true
+  }
+
   // Reject if input is half or less of the answer length (too short)
   if (normalizedInput.length <= normalizedAnswer.length * 0.5) {
     return false
@@ -75,4 +80,28 @@ export function isCloseEnough(input: string, answer: string): boolean {
   // Stricter for short words, more lenient for longer ones (power > 1)
   const maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 4)
   return distance <= maxAllowedDistance
+}
+
+// Check if input is ambiguous - matches multiple possible answers
+export function isAmbiguous(input: string, correctAnswer: string, allAnswers: string[]): boolean {
+  const normalizedInput = input.toLowerCase().trim()
+  const normalizedAnswer = correctAnswer.toLowerCase().trim()
+
+  // Exact match is never ambiguous
+  if (normalizedInput === normalizedAnswer) {
+    return false
+  }
+
+  if (!isCloseEnough(input, correctAnswer)) {
+    return false // Not even matching the correct answer
+  }
+
+  // Check if input also matches other answers
+  for (const answer of allAnswers) {
+    if (answer.toLowerCase().trim() === normalizedAnswer) continue
+    if (isCloseEnough(input, answer)) {
+      return true // Ambiguous - matches another country too
+    }
+  }
+  return false
 }

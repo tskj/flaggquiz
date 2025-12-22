@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import countryFlags from '../country-flags.json'
-import { isCloseEnough } from './fuzzyMatch'
+import { isCloseEnough, isAmbiguous } from './fuzzyMatch'
 
 const norwegianNames: Record<string, string> = {
   "Afghanistan": "Afghanistan",
@@ -229,6 +229,7 @@ export default function App() {
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
+  const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
   useEffect(() => {
     if (!quizStarted || quizFinished) return
@@ -278,7 +279,8 @@ export default function App() {
 
   const checkAnswer = (value: string) => {
     if (justAnswered) return
-    if (isCloseEnough(value, correctAnswer)) {
+    // Only accept if close enough AND not ambiguous with other countries
+    if (isCloseEnough(value, correctAnswer) && !isAmbiguous(value, correctAnswer, allNorwegianNames)) {
       setJustAnswered(true)
       setCompletedCount(prev => prev + 1)
       setCorrectFlags(prev => new Set(prev).add(currentCountry))
@@ -298,8 +300,8 @@ export default function App() {
         for (const country of Object.keys(countryFlags)) {
           if (country === currentCountry) continue
           const countryName = norwegianNames[country] || country
-          if (isCloseEnough(value, countryName)) {
-            // Found a close match with a different country - track as attempt
+          // Track as attempt if it's an unambiguous match to a wrong country
+          if (isCloseEnough(value, countryName) && !isAmbiguous(value, countryName, allNorwegianNames)) {
             if (!currentAttempts.includes(country)) {
               setCurrentAttempts(prev => [...prev, country])
             }
