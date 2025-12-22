@@ -73,6 +73,10 @@ describe('isCloseEnough', () => {
     it('very short partial matches', () => {
       expect(isCloseEnough('No', 'Norge')).toBe(false)
       expect(isCloseEnough('St', 'Storbritannia')).toBe(false)
+      expect(isCloseEnough('in', 'India')).toBe(false)
+      expect(isCloseEnough('dan', 'Danmark')).toBe(false)
+      expect(isCloseEnough('para', 'Paraguay')).toBe(false)
+      expect(isCloseEnough('P', 'Peru')).toBe(false)
     })
   })
 })

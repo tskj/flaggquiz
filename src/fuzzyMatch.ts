@@ -66,13 +66,13 @@ export function isCloseEnough(input: string, answer: string): boolean {
   const normalizedInput = input.toLowerCase().trim()
   const normalizedAnswer = answer.toLowerCase().trim()
 
-  // Reject if input is less than half the answer length (too short)
-  if (normalizedInput.length < normalizedAnswer.length * 0.5) {
+  // Reject if input is half or less of the answer length (too short)
+  if (normalizedInput.length <= normalizedAnswer.length * 0.5) {
     return false
   }
 
   const distance = fuzzyMatch(normalizedInput, normalizedAnswer)
-  // Base of 5 for single typos, plus sqrt scaling for longer names
-  const maxAllowedDistance = Math.floor(5 + Math.sqrt(normalizedAnswer.length) * 2)
+  // Stricter for short words, more lenient for longer ones (power > 1)
+  const maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 4)
   return distance <= maxAllowedDistance
 }
