@@ -1,9 +1,7 @@
-function App() {
+export default function App() {
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <h1 className="text-4xl font-bold text-blue-600">Flaggquiz</h1>
+    <div className="min-h-screen bg-black">
+      <h1 className="text-white">Flaggquiz</h1>
     </div>
   )
 }
-
-export default App
