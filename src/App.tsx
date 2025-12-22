@@ -143,7 +143,6 @@ export const norwegianNames: Record<string, string> = {
   "Oman": "Oman",
   "Pakistan": "Pakistan",
   "Palau": "Palau",
-  "Palestine": "Palestina",
   "Panama": "Panama",
   "Papua New Guinea": "Papua Ny-Guinea",
   "Paraguay": "Paraguay",
@@ -206,7 +205,9 @@ export const norwegianNames: Record<string, string> = {
   "Yemen": "Jemen",
   "Zambia": "Zambia",
   "Zimbabwe": "Zimbabwe",
+  // Omstridte områder
   "Kosovo": "Kosovo",
+  "Palestine": "Palestina",
   "Taiwan": "Taiwan"
 }
 
