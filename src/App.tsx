@@ -519,7 +519,7 @@ export default function App() {
             placeholder="Skriv landets navn..."
             className={`w-full text-white rounded-lg px-4 py-3 text-lg focus:outline-none transition-colors duration-150 ${
               justAnswered
-                ? 'bg-green-600 border-green-500 border-2 text-center font-bold'
+                ? 'bg-green-600 border-green-500 border-2 font-bold'
                 : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
             }`}
             autoComplete="off"
