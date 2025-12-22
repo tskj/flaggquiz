@@ -222,6 +222,9 @@ export default function App() {
   const [completedCount, setCompletedCount] = useState(0)
   const [round, setRound] = useState(1)
   const [justAnswered, setJustAnswered] = useState(false)
+  const [quizOrder, setQuizOrder] = useState<string[]>([])
+  const [correctFlags, setCorrectFlags] = useState<Set<string>>(new Set())
+  const [showAllResults, setShowAllResults] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
 
@@ -251,7 +254,9 @@ export default function App() {
 
   const startQuiz = () => {
     const allCountries = Object.keys(countryFlags)
-    setCurrentQueue(shuffleArray(allCountries))
+    const shuffled = shuffleArray(allCountries)
+    setCurrentQueue(shuffled)
+    setQuizOrder(shuffled)
     setSkippedFlags([])
     setCurrentIndex(0)
     setCompletedCount(0)
@@ -259,6 +264,8 @@ export default function App() {
     setRound(1)
     setQuizStarted(true)
     setQuizFinished(false)
+    setCorrectFlags(new Set())
+    setShowAllResults(false)
     setInput('')
   }
 
@@ -270,6 +277,7 @@ export default function App() {
     if (isCloseEnough(value, correctAnswer)) {
       setJustAnswered(true)
       setCompletedCount(prev => prev + 1)
+      setCorrectFlags(prev => new Set(prev).add(currentCountry))
       setTimeout(() => {
         setJustAnswered(false)
         moveToNext(false)
@@ -342,20 +350,67 @@ export default function App() {
   }
 
   if (quizFinished) {
+    const failedFlags = quizOrder.filter(country => !correctFlags.has(country))
+    const displayFlags = showAllResults ? quizOrder : failedFlags
+
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-        <h1 className="text-white text-3xl font-bold mb-4 text-center">
-          {completedCount === totalFlags ? 'Gratulerer!' : 'Tiden er ute!'}
-        </h1>
-        <p className="text-gray-400 text-xl mb-8 text-center">
-          Du klarte {completedCount} av {totalFlags} flagg
-        </p>
-        <button
-          onClick={startQuiz}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
-        >
-          Prøv igjen
-        </button>
+      <div className="min-h-screen bg-black flex flex-col p-4">
+        <div className="text-center mb-6">
+          <h1 className="text-white text-3xl font-bold mb-2">
+            {completedCount === totalFlags ? 'Gratulerer!' : 'Tiden er ute!'}
+          </h1>
+          <p className="text-gray-400 text-xl mb-4">
+            Du klarte {completedCount} av {totalFlags} flagg
+          </p>
+          <button
+            onClick={startQuiz}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
+          >
+            Prøv igjen
+          </button>
+        </div>
+
+        <div className="flex justify-center mb-4">
+          <button
+            onClick={() => setShowAllResults(false)}
+            className={`px-4 py-2 rounded-l-lg ${!showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+          >
+            Feil ({failedFlags.length})
+          </button>
+          <button
+            onClick={() => setShowAllResults(true)}
+            className={`px-4 py-2 rounded-r-lg ${showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+          >
+            Alle ({totalFlags})
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl mx-auto">
+            {displayFlags.map(country => {
+              const isCorrect = correctFlags.has(country)
+              const flagUrl = countryFlags[country as keyof typeof countryFlags]
+              const name = norwegianNames[country] || country
+              return (
+                <div
+                  key={country}
+                  className={`flex flex-col items-center p-2 rounded-lg ${
+                    isCorrect ? 'bg-green-900/30' : 'bg-red-900/30'
+                  }`}
+                >
+                  <img
+                    src={flagUrl}
+                    alt={name}
+                    className="w-20 h-12 object-contain mb-1"
+                  />
+                  <span className={`text-xs text-center ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                    {name}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
     )
   }
