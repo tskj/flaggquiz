@@ -225,6 +225,8 @@ export default function App() {
   const [quizOrder, setQuizOrder] = useState<string[]>([])
   const [correctFlags, setCorrectFlags] = useState<Set<string>>(new Set())
   const [showAllResults, setShowAllResults] = useState(false)
+  const [struggledFlags, setStruggledFlags] = useState<Map<string, string[]>>(new Map())
+  const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
 
@@ -266,6 +268,8 @@ export default function App() {
     setQuizFinished(false)
     setCorrectFlags(new Set())
     setShowAllResults(false)
+    setStruggledFlags(new Map())
+    setCurrentAttempts([])
     setInput('')
   }
 
@@ -278,10 +282,31 @@ export default function App() {
       setJustAnswered(true)
       setCompletedCount(prev => prev + 1)
       setCorrectFlags(prev => new Set(prev).add(currentCountry))
+      // If we had attempts before getting it right, mark as struggled
+      if (currentAttempts.length > 0) {
+        setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts]))
+      }
+      setCurrentAttempts([])
       setTimeout(() => {
         setJustAnswered(false)
         moveToNext(false)
       }, 400)
+    } else {
+      // Check if input matches any other country (close enough guess at wrong country)
+      const normalizedInput = value.toLowerCase().trim()
+      if (normalizedInput.length >= 3) {
+        for (const country of Object.keys(countryFlags)) {
+          if (country === currentCountry) continue
+          const countryName = norwegianNames[country] || country
+          if (isCloseEnough(value, countryName)) {
+            // Found a close match with a different country - track as attempt
+            if (!currentAttempts.includes(country)) {
+              setCurrentAttempts(prev => [...prev, country])
+            }
+            break
+          }
+        }
+      }
     }
   }
 
@@ -317,6 +342,7 @@ export default function App() {
       setQuizFinished(true)
     }
     setInput('')
+    setCurrentAttempts([])
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -351,7 +377,10 @@ export default function App() {
 
   if (quizFinished) {
     const failedFlags = quizOrder.filter(country => !correctFlags.has(country))
-    const displayFlags = showAllResults ? quizOrder : failedFlags
+    const struggledList = Array.from(struggledFlags.keys())
+    // For the "Feil/Struggled" view, show both failed and struggled flags
+    const problemFlags = [...failedFlags, ...struggledList.filter(c => !failedFlags.includes(c))]
+    const displayFlags = showAllResults ? quizOrder : problemFlags
 
     return (
       <div className="min-h-screen bg-black flex flex-col p-4">
@@ -375,7 +404,7 @@ export default function App() {
             onClick={() => setShowAllResults(false)}
             className={`px-4 py-2 rounded-l-lg ${!showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
           >
-            Feil ({failedFlags.length})
+            Feil ({failedFlags.length}){struggledList.length > 0 && ` + ${struggledList.length} slitt`}
           </button>
           <button
             onClick={() => setShowAllResults(true)}
@@ -389,23 +418,39 @@ export default function App() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl mx-auto">
             {displayFlags.map(country => {
               const isCorrect = correctFlags.has(country)
+              const isStruggled = struggledFlags.has(country)
+              const attempts = struggledFlags.get(country)
               const flagUrl = countryFlags[country as keyof typeof countryFlags]
               const name = norwegianNames[country] || country
+
+              let bgColor = 'bg-red-900/30'
+              let textColor = 'text-red-400'
+              if (isCorrect && isStruggled) {
+                bgColor = 'bg-yellow-900/30'
+                textColor = 'text-yellow-400'
+              } else if (isCorrect) {
+                bgColor = 'bg-green-900/30'
+                textColor = 'text-green-400'
+              }
+
               return (
                 <div
                   key={country}
-                  className={`flex flex-col items-center p-2 rounded-lg ${
-                    isCorrect ? 'bg-green-900/30' : 'bg-red-900/30'
-                  }`}
+                  className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
                 >
                   <img
                     src={flagUrl}
                     alt={name}
                     className="w-20 h-12 object-contain mb-1"
                   />
-                  <span className={`text-xs text-center ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`text-xs text-center ${textColor}`}>
                     {name}
                   </span>
+                  {isStruggled && attempts && (
+                    <span className="text-xs text-gray-500 text-center mt-1">
+                      Prøvde: {attempts.map(c => norwegianNames[c] || c).join(', ')}
+                    </span>
+                  )}
                 </div>
               )
             })}
