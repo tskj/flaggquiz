@@ -378,6 +378,11 @@ export default function App() {
       ? [...skippedFlags, currentCountry]
       : skippedFlags
 
+    // Save any attempts made on this flag (even if skipping)
+    if (currentAttempts.length > 0) {
+      setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts]))
+    }
+
     if (currentIndex + 1 < currentQueue.length) {
       setCurrentIndex(currentIndex + 1)
       if (wasSkipped) setSkippedFlags(newSkipped)
@@ -450,8 +455,8 @@ export default function App() {
 
   if (quizFinished) {
     const failedFlags = quizOrder.filter(country => !correctFlags.has(country))
-    const struggledList = Array.from(struggledFlags.keys())
-    // Show failed and struggled flags in quiz order (interspersed, not grouped)
+    const struggledOnly = quizOrder.filter(country => correctFlags.has(country) && struggledFlags.has(country))
+    // Show failed and struggled flags in quiz order
     const problemFlags = quizOrder.filter(country =>
       !correctFlags.has(country) || struggledFlags.has(country)
     )
@@ -479,7 +484,7 @@ export default function App() {
             onClick={() => setShowAllResults(false)}
             className={`px-4 py-2 rounded-l-lg ${!showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
           >
-            Feil ({failedFlags.length}){struggledList.length > 0 && ` + ${struggledList.length} slitt`}
+            Feil ({failedFlags.length}){struggledOnly.length > 0 && ` + ${struggledOnly.length} slitt`}
           </button>
           <button
             onClick={() => setShowAllResults(true)}
