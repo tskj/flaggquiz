@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, type QuizSession } from './storage'
 
 // Alternative names that should also be accepted
 export const alternativeNames: Record<string, string[]> = {
@@ -229,6 +230,8 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 export default function App() {
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [quizStarted, setQuizStarted] = useState(false)
   const [quizFinished, setQuizFinished] = useState(false)
   const [currentQueue, setCurrentQueue] = useState<string[]>([])
@@ -249,6 +252,79 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   const totalFlags = Object.keys(countryFlags).length
   const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
+
+  // Build current session object for saving
+  const buildSession = useCallback((): QuizSession | null => {
+    if (!sessionId) return null
+    return {
+      id: sessionId,
+      startedAt: parseInt(sessionId),
+      finishedAt: quizFinished ? Date.now() : undefined,
+      timerEnabled,
+      timeRemaining,
+      quizOrder,
+      currentQueue,
+      currentIndex,
+      skippedFlags,
+      round,
+      correctFlags: Array.from(correctFlags),
+      struggledFlags: Object.fromEntries(struggledFlags),
+      currentAttempts,
+      pendingWrongMatch,
+      input,
+    }
+  }, [sessionId, quizFinished, timerEnabled, timeRemaining, quizOrder, currentQueue, currentIndex, skippedFlags, round, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
+
+  // Load session on mount
+  useEffect(() => {
+    const saved = loadActiveSession()
+    if (saved) {
+      setSessionId(saved.id)
+      setQuizStarted(true)
+      setQuizFinished(!!saved.finishedAt)
+      setTimerEnabled(saved.timerEnabled)
+      setTimeRemaining(saved.timeRemaining)
+      setQuizOrder(saved.quizOrder)
+      setCurrentQueue(saved.currentQueue)
+      setCurrentIndex(saved.currentIndex)
+      setSkippedFlags(saved.skippedFlags)
+      setRound(saved.round)
+      setCorrectFlags(new Set(saved.correctFlags))
+      setCompletedCount(saved.correctFlags.length)
+      setStruggledFlags(new Map(Object.entries(saved.struggledFlags)))
+      setCurrentAttempts(saved.currentAttempts)
+      setPendingWrongMatch(saved.pendingWrongMatch)
+      setInput(saved.input)
+    }
+    setIsLoading(false)
+  }, [])
+
+  // Save session on state changes
+  useEffect(() => {
+    if (isLoading || !sessionId) return
+    const session = buildSession()
+    if (session) {
+      saveActiveSession(session)
+    }
+  }, [isLoading, sessionId, buildSession])
+
+  // Move to history when quiz finishes (but keep active session for refresh)
+  const hasMovedToHistory = useRef(false)
+  useEffect(() => {
+    if (quizFinished && sessionId && !hasMovedToHistory.current) {
+      hasMovedToHistory.current = true
+      const session = buildSession()
+      if (session) {
+        session.finishedAt = Date.now()
+        addToHistory(session)
+        // Don't clear active session - keep it for refresh on results screen
+        saveActiveSession(session)
+      }
+    }
+    if (!quizFinished) {
+      hasMovedToHistory.current = false
+    }
+  }, [quizFinished, sessionId, buildSession])
 
   useEffect(() => {
     if (!quizStarted || quizFinished || !timerEnabled) return
@@ -275,9 +351,15 @@ export default function App() {
   }, [quizStarted, quizFinished, currentIndex, round])
 
 
-  const startQuiz = () => {
+  const startQuiz = (fresh: boolean = true) => {
+    // If starting fresh, clear any existing session
+    if (fresh) {
+      clearActiveSession()
+    }
     const allCountries = Object.keys(countryFlags)
     const shuffled = shuffleArray(allCountries)
+    const newSessionId = Date.now().toString()
+    setSessionId(newSessionId)
     setCurrentQueue(shuffled)
     setQuizOrder(shuffled)
     setSkippedFlags([])
@@ -427,6 +509,14 @@ export default function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
+        <span className="text-gray-400">Laster...</span>
+      </div>
+    )
+  }
+
   if (!quizStarted) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
@@ -444,7 +534,7 @@ export default function App() {
           <span className="text-gray-300">Uten tidsbegrensning</span>
         </label>
         <button
-          onClick={startQuiz}
+          onClick={() => startQuiz()}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
         >
           Start quiz
@@ -472,10 +562,10 @@ export default function App() {
             Du klarte {completedCount} av {totalFlags} flagg
           </p>
           <button
-            onClick={startQuiz}
+            onClick={() => startQuiz()}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
           >
-            Prøv igjen
+            Start ny quiz
           </button>
         </div>
 
@@ -593,12 +683,20 @@ export default function App() {
           Hopp over <span className="text-gray-400 text-sm">(Tab / Shift+Tab tilbake)</span>
         </button>
 
-        <button
-          onClick={giveUp}
-          className="text-gray-500 hover:text-gray-400 text-sm underline"
-        >
-          Gi opp
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={giveUp}
+            className="text-gray-500 hover:text-gray-400 text-sm underline"
+          >
+            Gi opp
+          </button>
+          <button
+            onClick={() => startQuiz()}
+            className="text-gray-500 hover:text-gray-400 text-sm underline"
+          >
+            Start på nytt
+          </button>
+        </div>
       </div>
     </div>
   )
