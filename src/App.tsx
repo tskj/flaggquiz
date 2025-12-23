@@ -253,6 +253,10 @@ export default function App() {
   const totalFlags = Object.keys(countryFlags).length
   const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
+  // Track if session was already finished when loaded (to avoid duplicate history)
+  const wasFinishedOnLoad = useRef(false)
+  const hasMovedToHistory = useRef(false)
+
   // Build current session object for saving
   const buildSession = useCallback((): QuizSession | null => {
     if (!sessionId) return null
@@ -295,6 +299,10 @@ export default function App() {
       setCurrentAttempts(saved.currentAttempts)
       setPendingWrongMatch(saved.pendingWrongMatch)
       setInput(saved.input)
+      // Mark if already finished to avoid duplicate history entries on refresh
+      if (saved.finishedAt) {
+        wasFinishedOnLoad.current = true
+      }
     }
     setIsLoading(false)
   }, [])
@@ -309,8 +317,10 @@ export default function App() {
   }, [isLoading, sessionId, buildSession])
 
   // Move to history when quiz finishes (but keep active session for refresh)
-  const hasMovedToHistory = useRef(false)
   useEffect(() => {
+    // Skip if already finished when loaded (already in history)
+    if (wasFinishedOnLoad.current) return
+
     if (quizFinished && sessionId && !hasMovedToHistory.current) {
       hasMovedToHistory.current = true
       const session = buildSession()
