@@ -8,6 +8,7 @@ export const alternativeNames: Record<string, string[]> = {
   "United States": ["Amerika", "De forente amerikanske stater"],
   "Myanmar": ["Burma"],
   "Belarus": ["Belarus"],
+  "Sri Lanka": ["Ceylon"],
 }
 
 export const norwegianNames: Record<string, string> = {
@@ -393,8 +394,23 @@ export default function App() {
     setPendingWrongMatch(null)
   }
 
+  const goBack = () => {
+    if (currentIndex > 0) {
+      // Remove current flag from skipped if it was just skipped
+      const prevFlag = currentQueue[currentIndex - 1]
+      setSkippedFlags(prev => prev.filter(f => f !== prevFlag))
+      setCurrentIndex(currentIndex - 1)
+      setInput('')
+      setCurrentAttempts([])
+      setPendingWrongMatch(null)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Tab') {
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault()
+      goBack()
+    } else if (e.key === 'Tab') {
       e.preventDefault()
       skipFlag()
     }
@@ -408,7 +424,7 @@ export default function App() {
 
   if (!quizStarted) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
         <h1 className="text-white text-3xl font-bold mb-8 text-center">Flaggquiz</h1>
         <p className="text-gray-400 mb-8 text-center">
           Gjett det norske navnet på {totalFlags} land
@@ -435,12 +451,14 @@ export default function App() {
   if (quizFinished) {
     const failedFlags = quizOrder.filter(country => !correctFlags.has(country))
     const struggledList = Array.from(struggledFlags.keys())
-    // For the "Feil/Struggled" view, show both failed and struggled flags
-    const problemFlags = [...failedFlags, ...struggledList.filter(c => !failedFlags.includes(c))]
+    // Show failed and struggled flags in quiz order (interspersed, not grouped)
+    const problemFlags = quizOrder.filter(country =>
+      !correctFlags.has(country) || struggledFlags.has(country)
+    )
     const displayFlags = showAllResults ? quizOrder : problemFlags
 
     return (
-      <div className="min-h-screen bg-black flex flex-col p-4">
+      <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
         <div className="text-center mb-6">
           <h1 className="text-white text-3xl font-bold mb-2">
             {completedCount === totalFlags ? 'Gratulerer!' : timerEnabled ? 'Tiden er ute!' : 'Resultat'}
@@ -522,7 +540,7 @@ export default function App() {
   const skippedCount = skippedFlags.length
 
   return (
-    <div className="min-h-screen bg-black flex flex-col p-4">
+    <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
       <div className="flex-1 flex flex-col items-center pt-2 sm:pt-8">
         <div className="w-full max-w-sm mb-2">
           <div className="flex justify-between items-center mb-1">
@@ -567,7 +585,7 @@ export default function App() {
           onClick={skipFlag}
           className="w-full max-w-sm bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg mb-3"
         >
-          Hopp over <span className="text-gray-400 text-sm">(Tab)</span>
+          Hopp over <span className="text-gray-400 text-sm">(Tab / Shift+Tab tilbake)</span>
         </button>
 
         <button
