@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fuzzyMatch, isCloseEnough, isAmbiguous, checkAnswer } from "./fuzzyMatch";
+import { fuzzyMatch, isCloseEnough, checkAnswer } from "./fuzzyMatch";
 import { norwegianNames, alternativeNames } from "./App";
 
 // All Norwegian country names for realistic ambiguity testing
