@@ -235,6 +235,7 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [input, setInput] = useState('')
   const [timeRemaining, setTimeRemaining] = useState(15 * 60)
+  const [timerEnabled, setTimerEnabled] = useState(true)
   const [completedCount, setCompletedCount] = useState(0)
   const [round, setRound] = useState(1)
   const [justAnswered, setJustAnswered] = useState(false)
@@ -249,7 +250,7 @@ export default function App() {
   const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
   useEffect(() => {
-    if (!quizStarted || quizFinished) return
+    if (!quizStarted || quizFinished || !timerEnabled) return
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -263,7 +264,7 @@ export default function App() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [quizStarted, quizFinished])
+  }, [quizStarted, quizFinished, timerEnabled])
 
   useEffect(() => {
     if (quizStarted && !quizFinished && inputRef.current) {
@@ -403,6 +404,15 @@ export default function App() {
         <p className="text-gray-400 mb-8 text-center">
           Gjett det norske navnet på {totalFlags} land
         </p>
+        <label className="flex items-center gap-3 mb-6 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!timerEnabled}
+            onChange={(e) => setTimerEnabled(!e.target.checked)}
+            className="w-5 h-5 rounded bg-gray-800 border-gray-600 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-gray-300">Uten tidsbegrensning</span>
+        </label>
         <button
           onClick={startQuiz}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
@@ -424,7 +434,7 @@ export default function App() {
       <div className="min-h-screen bg-black flex flex-col p-4">
         <div className="text-center mb-6">
           <h1 className="text-white text-3xl font-bold mb-2">
-            {completedCount === totalFlags ? 'Gratulerer!' : 'Tiden er ute!'}
+            {completedCount === totalFlags ? 'Gratulerer!' : timerEnabled ? 'Tiden er ute!' : 'Resultat'}
           </h1>
           <p className="text-gray-400 text-xl mb-4">
             Du klarte {completedCount} av {totalFlags} flagg
@@ -507,7 +517,7 @@ export default function App() {
       <div className="flex-1 flex flex-col items-center pt-2 sm:pt-8">
         <div className="w-full max-w-sm mb-2">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-white text-xl font-mono">{formatTime(timeRemaining)}</span>
+            <span className="text-white text-xl font-mono">{timerEnabled ? formatTime(timeRemaining) : '∞'}</span>
             <span className="text-green-500 text-lg font-bold">{completedCount} riktige</span>
           </div>
           <div className="flex justify-between items-center text-sm">
