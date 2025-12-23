@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import countryFlags from '../country-flags.json'
-import { checkAnswer as matchAnswer } from './fuzzyMatch'
+import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 
 // Alternative names that should also be accepted
 export const alternativeNames: Record<string, string[]> = {
@@ -320,18 +320,27 @@ export default function App() {
         moveToNext(false)
       }, 400)
     } else {
-      // Check if input matches any other country (close enough guess at wrong country)
+      // Check if input is a strict match for any other country (for tracking wrong attempts)
+      // Uses strict matching to avoid false positives like "Tsjekkia" matching "Tsjad"
       let currentMatch: string | null = null
       if (value.trim().length >= 3) {
         for (const country of Object.keys(countryFlags)) {
           if (country === currentCountry) continue
           const countryName = norwegianNames[country] || country
-          const countryAltNames = alternativeNames[country] || []
-          const result = matchAnswer(value, countryName, allNorwegianNames, countryAltNames, norwegianAlternativeNames)
-          if (result[0] === 'match') {
+          // Use strict matching: requires similar length and very low edit distance
+          if (isStrictMatch(value, countryName)) {
             currentMatch = country
             break
           }
+          // Also check alternative names
+          const countryAltNames = alternativeNames[country] || []
+          for (const alt of countryAltNames) {
+            if (isStrictMatch(value, alt)) {
+              currentMatch = country
+              break
+            }
+          }
+          if (currentMatch) break
         }
       }
 

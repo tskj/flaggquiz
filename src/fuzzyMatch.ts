@@ -120,8 +120,49 @@ export function isCloseEnough(input: string, answer: string): boolean {
   }
 
   const distance = fuzzyMatch(normalizedInput, normalizedAnswer)
-  // Stricter for short words, more lenient for longer ones
-  const maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 4)
+
+  // Base threshold: stricter for short words, more lenient for longer ones
+  let maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 4)
+
+  // More lenient for same-length words (handles typos like Columbia->Colombia)
+  const lengthDiff = Math.abs(normalizedInput.length - normalizedAnswer.length)
+  if (lengthDiff <= 1 && normalizedAnswer.length >= 6) {
+    maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 2.5)
+  }
+
+  return distance <= maxAllowedDistance
+}
+
+/**
+ * Stricter matching for tracking wrong attempts.
+ * Only returns true if the input is very close to the answer,
+ * requiring similar length and low edit distance.
+ * This prevents "Tsjekkia" from matching "Tsjad" or "Indonesia" from matching "India".
+ */
+export function isStrictMatch(input: string, answer: string): boolean {
+  const normalizedInput = input.toLowerCase().trim()
+  const normalizedAnswer = answer.toLowerCase().trim()
+
+  // Exact match
+  if (normalizedInput === normalizedAnswer) {
+    return true
+  }
+
+  // Minimum 3 chars
+  if (normalizedInput.length < 3) {
+    return false
+  }
+
+  // Length must be within 2 characters of each other
+  const lengthDiff = Math.abs(normalizedInput.length - normalizedAnswer.length)
+  if (lengthDiff > 2) {
+    return false
+  }
+
+  // Use a much stricter distance threshold
+  const distance = fuzzyMatch(normalizedInput, normalizedAnswer)
+  // Only allow very small differences (basically typos)
+  const maxAllowedDistance = Math.min(4, Math.floor(normalizedAnswer.length / 3))
   return distance <= maxAllowedDistance
 }
 
