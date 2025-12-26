@@ -503,7 +503,9 @@ export default function App() {
       setCurrentIndex(currentIndex + 1)
       if (wasSkipped) setSkippedFlags(newSkipped)
     } else if (newSkipped.length > 0) {
-      setCurrentQueue(shuffleArray(newSkipped))
+      // Keep original order from quizOrder for subsequent rounds
+      const orderedSkipped = newSkipped.sort((a, b) => quizOrder.indexOf(a) - quizOrder.indexOf(b))
+      setCurrentQueue(orderedSkipped)
       setSkippedFlags([])
       setCurrentIndex(0)
       setRound(prev => prev + 1)
