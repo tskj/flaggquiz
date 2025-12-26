@@ -707,7 +707,8 @@ export default function App() {
             >
               {getQuizTypeName(type)}
               <span className="block text-xs font-normal opacity-80">
-                {getQuizCount(type)} {type === 'territories' ? 'territorier' : 'land'} - {Math.floor(getDefaultTime(type) / 60)} min
+                {getQuizCount(type)} {type === 'territories' ? 'territorier' : 'land'}
+                <span className={!timerEnabled ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
               </span>
             </button>
           ))}
