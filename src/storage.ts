@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Quiz types
-export type QuizType = 'world' | 'europe' | 'territories'
+export type QuizType = 'world' | 'europe' | 'africa' | 'asia' | 'north-america' | 'south-america' | 'oceania' | 'territories'
 
 // Schema for a single quiz session
 export const QuizSessionSchema = z.object({
@@ -10,7 +10,7 @@ export const QuizSessionSchema = z.object({
   finishedAt: z.number().optional(),
   timerEnabled: z.boolean(),
   timeRemaining: z.number(),
-  quizType: z.enum(['world', 'europe', 'territories']).default('world'),
+  quizType: z.enum(['world', 'europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania', 'territories']).default('world'),
 
   // Quiz configuration
   quizOrder: z.array(z.string()),

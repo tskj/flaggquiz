@@ -4,7 +4,7 @@ import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, type QuizSession, type QuizType } from './storage'
 
-// European countries (English names matching country-flags.json keys)
+// Countries by continent (English names matching country-flags.json keys)
 export const europeanCountries = [
   'Albania', 'Andorra', 'Austria', 'Belarus', 'Belgium', 'Bosnia and Herzegovina',
   'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia',
@@ -14,6 +14,47 @@ export const europeanCountries = [
   'Norway', 'Poland', 'Portugal', 'Romania', 'Russia', 'San Marino', 'Serbia',
   'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'Ukraine',
   'United Kingdom', 'Vatican City'
+]
+
+export const africanCountries = [
+  'Algeria', 'Angola', 'Benin', 'Botswana', 'Burkina Faso', 'Burundi', 'Cameroon',
+  'Cape Verde', 'Central African Republic', 'Chad', 'Comoros',
+  'Democratic Republic of the Congo', 'Republic of the Congo', 'Djibouti', 'Egypt',
+  'Equatorial Guinea', 'Eritrea', 'Eswatini', 'Ethiopia', 'Gabon', 'Gambia', 'Ghana',
+  'Guinea', 'Guinea-Bissau', 'Ivory Coast', 'Kenya', 'Lesotho', 'Liberia', 'Libya',
+  'Madagascar', 'Malawi', 'Mali', 'Mauritania', 'Mauritius', 'Morocco', 'Mozambique',
+  'Namibia', 'Niger', 'Nigeria', 'Rwanda', 'Sao Tome and Principe', 'Senegal',
+  'Seychelles', 'Sierra Leone', 'Somalia', 'South Africa', 'South Sudan', 'Sudan',
+  'Tanzania', 'Togo', 'Tunisia', 'Uganda', 'Zambia', 'Zimbabwe'
+]
+
+export const asianCountries = [
+  'Afghanistan', 'Armenia', 'Azerbaijan', 'Bahrain', 'Bangladesh', 'Bhutan', 'Brunei',
+  'Cambodia', 'China', 'Georgia', 'India', 'Indonesia', 'Iran', 'Iraq', 'Israel',
+  'Japan', 'Jordan', 'Kazakhstan', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Lebanon',
+  'Malaysia', 'Maldives', 'Mongolia', 'Myanmar', 'Nepal', 'North Korea', 'Oman',
+  'Pakistan', 'Philippines', 'Qatar', 'Saudi Arabia', 'Singapore', 'South Korea',
+  'Sri Lanka', 'Syria', 'Taiwan', 'Tajikistan', 'Thailand', 'Timor-Leste', 'Turkey',
+  'Turkmenistan', 'United Arab Emirates', 'Uzbekistan', 'Vietnam', 'Yemen'
+]
+
+export const northAmericanCountries = [
+  'Antigua and Barbuda', 'Bahamas', 'Barbados', 'Belize', 'Canada', 'Costa Rica',
+  'Cuba', 'Dominica', 'Dominican Republic', 'El Salvador', 'Grenada', 'Guatemala',
+  'Haiti', 'Honduras', 'Jamaica', 'Mexico', 'Nicaragua', 'Panama',
+  'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines',
+  'Trinidad and Tobago', 'United States'
+]
+
+export const southAmericanCountries = [
+  'Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Ecuador', 'Guyana',
+  'Paraguay', 'Peru', 'Suriname', 'Uruguay', 'Venezuela'
+]
+
+export const oceanianCountries = [
+  'Australia', 'Fiji', 'Kiribati', 'Marshall Islands', 'Micronesia', 'Nauru',
+  'New Zealand', 'Palau', 'Papua New Guinea', 'Samoa', 'Solomon Islands', 'Tonga',
+  'Tuvalu', 'Vanuatu'
 ]
 
 // Norwegian names for disputed territories
@@ -291,12 +332,34 @@ export default function App() {
     return norwegianNames[country] || country
   }
 
+  const getQuizCount = (type: QuizType): number => {
+    switch (type) {
+      case 'europe': return europeanCountries.length
+      case 'africa': return africanCountries.length
+      case 'asia': return asianCountries.length
+      case 'north-america': return northAmericanCountries.length
+      case 'south-america': return southAmericanCountries.length
+      case 'oceania': return oceanianCountries.length
+      case 'territories': return Object.keys(territoryFlags).length
+      default: return Object.keys(countryFlags).length
+    }
+  }
+
+  const getQuizTypeName = (type: QuizType): string => {
+    switch (type) {
+      case 'europe': return 'Europa'
+      case 'africa': return 'Afrika'
+      case 'asia': return 'Asia'
+      case 'north-america': return 'Nord-Amerika'
+      case 'south-america': return 'Sør-Amerika'
+      case 'oceania': return 'Oseania'
+      case 'territories': return 'Territorier'
+      default: return 'Verden'
+    }
+  }
+
   const currentFlags = getQuizFlags(quizType)
-  const totalFlags = quizType === 'europe'
-    ? europeanCountries.length
-    : quizType === 'territories'
-      ? Object.keys(territoryFlags).length
-      : Object.keys(countryFlags).length
+  const totalFlags = getQuizCount(quizType)
   const allNorwegianNames = quizType === 'territories'
     ? Object.keys(territoryFlags).map(c => territoryNorwegianNames[c] || c)
     : Object.keys(countryFlags).map(c => norwegianNames[c] || c)
@@ -411,16 +474,38 @@ export default function App() {
   }, [quizStarted, quizFinished, currentIndex, round])
 
 
+  const getCountriesForType = (type: QuizType): string[] => {
+    switch (type) {
+      case 'europe': return europeanCountries.filter(c => c in countryFlags)
+      case 'africa': return africanCountries.filter(c => c in countryFlags)
+      case 'asia': return asianCountries.filter(c => c in countryFlags)
+      case 'north-america': return northAmericanCountries.filter(c => c in countryFlags)
+      case 'south-america': return southAmericanCountries.filter(c => c in countryFlags)
+      case 'oceania': return oceanianCountries.filter(c => c in countryFlags)
+      case 'territories': return Object.keys(territoryFlags)
+      default: return Object.keys(countryFlags)
+    }
+  }
+
+  const getDefaultTime = (type: QuizType): number => {
+    switch (type) {
+      case 'territories': return 3 * 60
+      case 'oceania': return 5 * 60
+      case 'south-america': return 5 * 60
+      case 'north-america': return 8 * 60
+      case 'europe': return 10 * 60
+      case 'africa': return 12 * 60
+      case 'asia': return 12 * 60
+      default: return 15 * 60
+    }
+  }
+
   const startQuiz = (type: QuizType = 'world') => {
     clearActiveSession()
-    const flags = getQuizFlags(type)
-    const allCountries = type === 'europe'
-      ? europeanCountries.filter(c => c in countryFlags)
-      : Object.keys(flags)
+    const allCountries = getCountriesForType(type)
     const shuffled = shuffleArray(allCountries)
     const newSessionId = Date.now().toString()
-    // Territories: 3 minutes, Europe: 10 minutes, World: 15 minutes
-    const defaultTime = type === 'territories' ? 3 * 60 : type === 'europe' ? 10 * 60 : 15 * 60
+    const defaultTime = getDefaultTime(type)
     setSessionId(newSessionId)
     setQuizType(type)
     setCurrentQueue(shuffled)
@@ -590,17 +675,21 @@ export default function App() {
   }
 
   if (!quizStarted) {
-    const worldCount = Object.keys(countryFlags).length
-    const europeCount = europeanCountries.length
-    const territoryCount = Object.keys(territoryFlags).length
+    const quizOptions: { type: QuizType; color: string }[] = [
+      { type: 'world', color: 'bg-blue-600 hover:bg-blue-700' },
+      { type: 'europe', color: 'bg-green-600 hover:bg-green-700' },
+      { type: 'africa', color: 'bg-yellow-600 hover:bg-yellow-700' },
+      { type: 'asia', color: 'bg-red-600 hover:bg-red-700' },
+      { type: 'north-america', color: 'bg-orange-600 hover:bg-orange-700' },
+      { type: 'south-america', color: 'bg-teal-600 hover:bg-teal-700' },
+      { type: 'oceania', color: 'bg-cyan-600 hover:bg-cyan-700' },
+      { type: 'territories', color: 'bg-purple-600 hover:bg-purple-700' },
+    ]
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
-        <h1 className="text-white text-3xl font-bold mb-8 text-center">Flaggquiz</h1>
-        <p className="text-gray-400 mb-6 text-center">
-          Gjett det norske navnet på landene
-        </p>
-        <label className="flex items-center gap-3 mb-8 cursor-pointer">
+        <h1 className="text-white text-3xl font-bold mb-6 text-center">Flaggquiz</h1>
+        <label className="flex items-center gap-3 mb-6 cursor-pointer">
           <input
             type="checkbox"
             checked={!timerEnabled}
@@ -609,28 +698,19 @@ export default function App() {
           />
           <span className="text-gray-300">Uten tidsbegrensning</span>
         </label>
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <button
-            onClick={() => startQuiz('world')}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
-          >
-            Hele verden
-            <span className="block text-sm font-normal opacity-80">{worldCount} land - 15 min</span>
-          </button>
-          <button
-            onClick={() => startQuiz('europe')}
-            className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
-          >
-            Kun Europa
-            <span className="block text-sm font-normal opacity-80">{europeCount} land - 10 min</span>
-          </button>
-          <button
-            onClick={() => startQuiz('territories')}
-            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
-          >
-            Territorier
-            <span className="block text-sm font-normal opacity-80">{territoryCount} territorier - 3 min</span>
-          </button>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md">
+          {quizOptions.map(({ type, color }) => (
+            <button
+              key={type}
+              onClick={() => startQuiz(type)}
+              className={`${color} text-white font-bold py-3 px-4 rounded-lg text-lg`}
+            >
+              {getQuizTypeName(type)}
+              <span className="block text-xs font-normal opacity-80">
+                {getQuizCount(type)} {type === 'territories' ? 'territorier' : 'land'} - {Math.floor(getDefaultTime(type) / 60)} min
+              </span>
+            </button>
+          ))}
         </div>
       </div>
     )
@@ -644,7 +724,7 @@ export default function App() {
       !correctFlags.has(country) || struggledFlags.has(country)
     )
     const displayFlags = showAllResults ? quizOrder : problemFlags
-    const quizTypeName = quizType === 'territories' ? 'Territorier' : quizType === 'europe' ? 'Europa' : 'Verden'
+    const quizTypeName = getQuizTypeName(quizType)
 
     return (
       <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
@@ -736,7 +816,7 @@ export default function App() {
   const flagUrl = currentFlags[currentCountry as keyof typeof currentFlags]
   const remainingInRound = currentQueue.length - currentIndex - 1
   const skippedCount = skippedFlags.length
-  const quizTypeName = quizType === 'territories' ? 'Territorier' : quizType === 'europe' ? 'Europa' : 'Verden'
+  const quizTypeName = getQuizTypeName(quizType)
 
   return (
     <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
