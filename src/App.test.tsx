@@ -41,15 +41,16 @@ function findCountryByFlagUrl(flagUrl: string): string | undefined {
 
 describe('Quiz flow - no false positive struggled tracking', () => {
   beforeEach(() => {
-    // Reset any state between tests
+    // Clear localStorage to reset quiz state between tests
+    localStorage.clear()
   })
 
   it('completes entire quiz without any struggled flags when typing correctly', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    // Start the quiz
-    const startButton = screen.getByText('Start quiz')
+    // Start the world quiz
+    const startButton = screen.getByText('Hele verden')
     await user.click(startButton)
 
     // Wait for quiz to start
@@ -112,8 +113,8 @@ describe('Quiz flow - no false positive struggled tracking', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    // Start the quiz
-    await user.click(screen.getByText('Start quiz'))
+    // Start the world quiz
+    await user.click(screen.getByText('Hele verden'))
 
     await waitFor(() => {
       expect(screen.getByRole('textbox')).toBeInTheDocument()
@@ -160,11 +161,15 @@ describe('Quiz flow - no false positive struggled tracking', () => {
 })
 
 describe('Quiz flow - typing through partial matches', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
   it('does not track "Norge" as struggled when typing "Nord-Korea"', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByText('Start quiz'))
+    await user.click(screen.getByText('Hele verden'))
 
     await waitFor(() => {
       expect(screen.getByRole('textbox')).toBeInTheDocument()

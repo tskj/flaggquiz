@@ -1,7 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
-import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, type QuizSession } from './storage'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, type QuizSession, type QuizType } from './storage'
+
+// European countries (English names matching country-flags.json keys)
+export const europeanCountries = [
+  'Albania', 'Andorra', 'Austria', 'Belarus', 'Belgium', 'Bosnia and Herzegovina',
+  'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia',
+  'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Ireland',
+  'Italy', 'Kosovo', 'Latvia', 'Liechtenstein', 'Lithuania', 'Luxembourg',
+  'Malta', 'Moldova', 'Monaco', 'Montenegro', 'Netherlands', 'North Macedonia',
+  'Norway', 'Poland', 'Portugal', 'Romania', 'Russia', 'San Marino', 'Serbia',
+  'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'Ukraine',
+  'United Kingdom', 'Vatican City'
+]
 
 // Alternative names that should also be accepted
 export const alternativeNames: Record<string, string[]> = {
@@ -249,8 +261,9 @@ export default function App() {
   const [struggledFlags, setStruggledFlags] = useState<Map<string, string[]>>(new Map())
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
   const [pendingWrongMatch, setPendingWrongMatch] = useState<string | null>(null)
+  const [quizType, setQuizType] = useState<QuizType>('world')
   const inputRef = useRef<HTMLInputElement>(null)
-  const totalFlags = Object.keys(countryFlags).length
+  const totalFlags = quizType === 'europe' ? europeanCountries.length : Object.keys(countryFlags).length
   const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
   // Track if session was already finished when loaded (to avoid duplicate history)
@@ -266,6 +279,7 @@ export default function App() {
       finishedAt: quizFinished ? Date.now() : undefined,
       timerEnabled,
       timeRemaining,
+      quizType,
       quizOrder,
       currentQueue,
       currentIndex,
@@ -277,7 +291,7 @@ export default function App() {
       pendingWrongMatch,
       input,
     }
-  }, [sessionId, quizFinished, timerEnabled, timeRemaining, quizOrder, currentQueue, currentIndex, skippedFlags, round, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
+  }, [sessionId, quizFinished, timerEnabled, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, skippedFlags, round, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
 
   // Load session on mount
   useEffect(() => {
@@ -288,6 +302,7 @@ export default function App() {
       setQuizFinished(!!saved.finishedAt)
       setTimerEnabled(saved.timerEnabled)
       setTimeRemaining(saved.timeRemaining)
+      setQuizType(saved.quizType || 'world')
       setQuizOrder(saved.quizOrder)
       setCurrentQueue(saved.currentQueue)
       setCurrentIndex(saved.currentIndex)
@@ -361,21 +376,23 @@ export default function App() {
   }, [quizStarted, quizFinished, currentIndex, round])
 
 
-  const startQuiz = (fresh: boolean = true) => {
-    // If starting fresh, clear any existing session
-    if (fresh) {
-      clearActiveSession()
-    }
-    const allCountries = Object.keys(countryFlags)
+  const startQuiz = (type: QuizType = 'world') => {
+    clearActiveSession()
+    const allCountries = type === 'europe'
+      ? europeanCountries.filter(c => c in countryFlags)
+      : Object.keys(countryFlags)
     const shuffled = shuffleArray(allCountries)
     const newSessionId = Date.now().toString()
+    // Europe quiz: 10 minutes, World quiz: 15 minutes
+    const defaultTime = type === 'europe' ? 10 * 60 : 15 * 60
     setSessionId(newSessionId)
+    setQuizType(type)
     setCurrentQueue(shuffled)
     setQuizOrder(shuffled)
     setSkippedFlags([])
     setCurrentIndex(0)
     setCompletedCount(0)
-    setTimeRemaining(15 * 60)
+    setTimeRemaining(defaultTime)
     setRound(1)
     setQuizStarted(true)
     setQuizFinished(false)
@@ -465,6 +482,13 @@ export default function App() {
     setQuizFinished(true)
   }
 
+  const goToStartScreen = () => {
+    clearActiveSession()
+    setQuizStarted(false)
+    setQuizFinished(false)
+    setSessionId(null)
+  }
+
   const moveToNext = (wasSkipped: boolean) => {
     const newSkipped = wasSkipped
       ? [...skippedFlags, currentCountry]
@@ -528,13 +552,16 @@ export default function App() {
   }
 
   if (!quizStarted) {
+    const worldCount = Object.keys(countryFlags).length
+    const europeCount = europeanCountries.length
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
         <h1 className="text-white text-3xl font-bold mb-8 text-center">Flaggquiz</h1>
-        <p className="text-gray-400 mb-8 text-center">
-          Gjett det norske navnet på {totalFlags} land
+        <p className="text-gray-400 mb-6 text-center">
+          Gjett det norske navnet på landene
         </p>
-        <label className="flex items-center gap-3 mb-6 cursor-pointer">
+        <label className="flex items-center gap-3 mb-8 cursor-pointer">
           <input
             type="checkbox"
             checked={!timerEnabled}
@@ -543,12 +570,22 @@ export default function App() {
           />
           <span className="text-gray-300">Uten tidsbegrensning</span>
         </label>
-        <button
-          onClick={() => startQuiz()}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
-        >
-          Start quiz
-        </button>
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <button
+            onClick={() => startQuiz('world')}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
+          >
+            Hele verden
+            <span className="block text-sm font-normal opacity-80">{worldCount} land - 15 min</span>
+          </button>
+          <button
+            onClick={() => startQuiz('europe')}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
+          >
+            Kun Europa
+            <span className="block text-sm font-normal opacity-80">{europeCount} land - 10 min</span>
+          </button>
+        </div>
       </div>
     )
   }
@@ -561,22 +598,32 @@ export default function App() {
       !correctFlags.has(country) || struggledFlags.has(country)
     )
     const displayFlags = showAllResults ? quizOrder : problemFlags
+    const quizTypeName = quizType === 'europe' ? 'Europa' : 'Verden'
 
     return (
       <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
         <div className="text-center mb-6">
+          <p className="text-gray-500 text-sm mb-2">{quizTypeName}</p>
           <h1 className="text-white text-3xl font-bold mb-2">
             {completedCount === totalFlags ? 'Gratulerer!' : timerEnabled ? 'Tiden er ute!' : 'Resultat'}
           </h1>
           <p className="text-gray-400 text-xl mb-4">
             Du klarte {completedCount} av {totalFlags} flagg
           </p>
-          <button
-            onClick={() => startQuiz()}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
-          >
-            Start ny quiz
-          </button>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => startQuiz(quizType)}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
+            >
+              Prøv igjen
+            </button>
+            <button
+              onClick={goToStartScreen}
+              className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg"
+            >
+              Velg quiz
+            </button>
+          </div>
         </div>
 
         <div className="flex justify-center mb-4">
@@ -643,6 +690,7 @@ export default function App() {
   const flagUrl = countryFlags[currentCountry as keyof typeof countryFlags]
   const remainingInRound = currentQueue.length - currentIndex - 1
   const skippedCount = skippedFlags.length
+  const quizTypeName = quizType === 'europe' ? 'Europa' : 'Verden'
 
   return (
     <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
@@ -653,7 +701,7 @@ export default function App() {
             <span className="text-green-500 text-lg font-bold">{completedCount} riktige</span>
           </div>
           <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">Runde {round}</span>
+            <span className="text-gray-500">{quizTypeName} - Runde {round}</span>
             <div className="flex gap-4">
               <span className="text-gray-400">{remainingInRound} igjen</span>
               <span className="text-yellow-500">{skippedCount} hoppet over</span>
@@ -701,7 +749,7 @@ export default function App() {
             Gi opp
           </button>
           <button
-            onClick={() => startQuiz()}
+            onClick={() => startQuiz(quizType)}
             className="text-gray-500 hover:text-gray-400 text-sm underline"
           >
             Start på nytt
