@@ -353,7 +353,7 @@ export default function App() {
       case 'north-america': return 'Nord-Amerika'
       case 'south-america': return 'Sør-Amerika'
       case 'oceania': return 'Oseania'
-      case 'territories': return 'Territorier'
+      case 'territories': return 'Ymse territorier'
       default: return 'Verden'
     }
   }
