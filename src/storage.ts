@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Quiz types
-export type QuizType = 'world' | 'europe'
+export type QuizType = 'world' | 'europe' | 'territories'
 
 // Schema for a single quiz session
 export const QuizSessionSchema = z.object({
@@ -10,7 +10,7 @@ export const QuizSessionSchema = z.object({
   finishedAt: z.number().optional(),
   timerEnabled: z.boolean(),
   timeRemaining: z.number(),
-  quizType: z.enum(['world', 'europe']).default('world'),
+  quizType: z.enum(['world', 'europe', 'territories']).default('world'),
 
   // Quiz configuration
   quizOrder: z.array(z.string()),

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
+import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, type QuizSession, type QuizType } from './storage'
 
@@ -14,6 +15,23 @@ export const europeanCountries = [
   'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'Ukraine',
   'United Kingdom', 'Vatican City'
 ]
+
+// Norwegian names for disputed territories
+export const territoryNorwegianNames: Record<string, string> = {
+  "Abkhazia": "Abkhasia",
+  "Cook Islands": "Cookøyene",
+  "England": "England",
+  "Niue": "Niue",
+  "Northern Cyprus": "Nord-Kypros",
+  "Northern Ireland": "Nord-Irland",
+  "Palestine": "Palestina",
+  "Sahrawi Arab Democratic Republic": "Vest-Sahara",
+  "Scotland": "Skottland",
+  "Somaliland": "Somaliland",
+  "South Ossetia": "Sør-Ossetia",
+  "Transnistria": "Transnistria",
+  "Wales": "Wales",
+}
 
 // Alternative names that should also be accepted
 export const alternativeNames: Record<string, string[]> = {
@@ -263,8 +281,25 @@ export default function App() {
   const [pendingWrongMatch, setPendingWrongMatch] = useState<string | null>(null)
   const [quizType, setQuizType] = useState<QuizType>('world')
   const inputRef = useRef<HTMLInputElement>(null)
-  const totalFlags = quizType === 'europe' ? europeanCountries.length : Object.keys(countryFlags).length
-  const allNorwegianNames = Object.keys(countryFlags).map(c => norwegianNames[c] || c)
+
+  // Get the appropriate flags and names based on quiz type
+  const getQuizFlags = (type: QuizType) => type === 'territories' ? territoryFlags : countryFlags
+  const getQuizName = (country: string) => {
+    if (quizType === 'territories') {
+      return territoryNorwegianNames[country] || country
+    }
+    return norwegianNames[country] || country
+  }
+
+  const currentFlags = getQuizFlags(quizType)
+  const totalFlags = quizType === 'europe'
+    ? europeanCountries.length
+    : quizType === 'territories'
+      ? Object.keys(territoryFlags).length
+      : Object.keys(countryFlags).length
+  const allNorwegianNames = quizType === 'territories'
+    ? Object.keys(territoryFlags).map(c => territoryNorwegianNames[c] || c)
+    : Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
   // Track if session was already finished when loaded (to avoid duplicate history)
   const wasFinishedOnLoad = useRef(false)
@@ -378,13 +413,14 @@ export default function App() {
 
   const startQuiz = (type: QuizType = 'world') => {
     clearActiveSession()
+    const flags = getQuizFlags(type)
     const allCountries = type === 'europe'
       ? europeanCountries.filter(c => c in countryFlags)
-      : Object.keys(countryFlags)
+      : Object.keys(flags)
     const shuffled = shuffleArray(allCountries)
     const newSessionId = Date.now().toString()
-    // Europe quiz: 10 minutes, World quiz: 15 minutes
-    const defaultTime = type === 'europe' ? 10 * 60 : 15 * 60
+    // Territories: 3 minutes, Europe: 10 minutes, World: 15 minutes
+    const defaultTime = type === 'territories' ? 3 * 60 : type === 'europe' ? 10 * 60 : 15 * 60
     setSessionId(newSessionId)
     setQuizType(type)
     setCurrentQueue(shuffled)
@@ -404,7 +440,7 @@ export default function App() {
   }
 
   const currentCountry = currentQueue[currentIndex]
-  const correctAnswer = norwegianNames[currentCountry] || currentCountry
+  const correctAnswer = getQuizName(currentCountry)
   const altNames = alternativeNames[currentCountry] || []
 
   // Check if value matches the correct answer or any alternative name
@@ -434,9 +470,9 @@ export default function App() {
       // Uses strict matching to avoid false positives like "Tsjekkia" matching "Tsjad"
       let currentMatch: string | null = null
       if (value.trim().length >= 3) {
-        for (const country of Object.keys(countryFlags)) {
+        for (const country of Object.keys(currentFlags)) {
           if (country === currentCountry) continue
-          const countryName = norwegianNames[country] || country
+          const countryName = getQuizName(country)
           // Use strict matching: requires similar length and very low edit distance
           if (isStrictMatch(value, countryName)) {
             currentMatch = country
@@ -556,6 +592,7 @@ export default function App() {
   if (!quizStarted) {
     const worldCount = Object.keys(countryFlags).length
     const europeCount = europeanCountries.length
+    const territoryCount = Object.keys(territoryFlags).length
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
@@ -587,6 +624,13 @@ export default function App() {
             Kun Europa
             <span className="block text-sm font-normal opacity-80">{europeCount} land - 10 min</span>
           </button>
+          <button
+            onClick={() => startQuiz('territories')}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-8 rounded-lg text-xl"
+          >
+            Territorier
+            <span className="block text-sm font-normal opacity-80">{territoryCount} territorier - 3 min</span>
+          </button>
         </div>
       </div>
     )
@@ -600,7 +644,7 @@ export default function App() {
       !correctFlags.has(country) || struggledFlags.has(country)
     )
     const displayFlags = showAllResults ? quizOrder : problemFlags
-    const quizTypeName = quizType === 'europe' ? 'Europa' : 'Verden'
+    const quizTypeName = quizType === 'territories' ? 'Territorier' : quizType === 'europe' ? 'Europa' : 'Verden'
 
     return (
       <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
@@ -649,8 +693,8 @@ export default function App() {
               const isCorrect = correctFlags.has(country)
               const isStruggled = struggledFlags.has(country)
               const attempts = struggledFlags.get(country)
-              const flagUrl = countryFlags[country as keyof typeof countryFlags]
-              const name = norwegianNames[country] || country
+              const flagUrl = currentFlags[country as keyof typeof currentFlags]
+              const name = getQuizName(country)
 
               let bgColor = 'bg-red-900/30'
               let textColor = 'text-red-400'
@@ -677,7 +721,7 @@ export default function App() {
                   </span>
                   {isStruggled && attempts && (
                     <span className="text-xs text-gray-500 text-center mt-1">
-                      Prøvde: {attempts.map(c => norwegianNames[c] || c).join(', ')}
+                      Prøvde: {attempts.map(c => getQuizName(c)).join(', ')}
                     </span>
                   )}
                 </div>
@@ -689,10 +733,10 @@ export default function App() {
     )
   }
 
-  const flagUrl = countryFlags[currentCountry as keyof typeof countryFlags]
+  const flagUrl = currentFlags[currentCountry as keyof typeof currentFlags]
   const remainingInRound = currentQueue.length - currentIndex - 1
   const skippedCount = skippedFlags.length
-  const quizTypeName = quizType === 'europe' ? 'Europa' : 'Verden'
+  const quizTypeName = quizType === 'territories' ? 'Territorier' : quizType === 'europe' ? 'Europa' : 'Verden'
 
   return (
     <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
