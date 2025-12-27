@@ -1347,7 +1347,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col p-2 sm:p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
       <div className="flex-1 flex flex-col items-center pt-1 sm:pt-4 lg:pt-8">
-        <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-1 sm:mb-2">
+        <div className="w-full max-w-4xl w-[95vw] mb-1 sm:mb-2">
           <div className="flex justify-between items-center mb-1">
             {!practiceMode && <span className="text-white text-lg sm:text-xl lg:text-2xl font-mono">{formatTime(timeRemaining)}</span>}
             <span className={`text-green-500 text-base sm:text-lg lg:text-xl font-bold ${practiceMode ? 'ml-auto' : ''}`}>{completedCount} riktige</span>
@@ -1379,9 +1379,9 @@ export default function App() {
 
         {isCapitalInputQuiz(quizType) ? (
           /* Capital input quiz: Map with flag overlay + country name as question */
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+          <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">
             <div className="relative aspect-video mb-3 rounded-lg overflow-hidden">
-              <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
+              <CountryMap highlightedCountry={currentCountry} width={672} height={378} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
               <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg bg-gray-800">
                 <img
                   src={flagUrl}
@@ -1395,24 +1395,24 @@ export default function App() {
           </div>
         ) : isCapitalChoiceQuiz(quizType) ? (
           /* Capital choice quiz: Capital name as question */
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mt-8 sm:mt-12 mb-10 sm:mb-14 text-center">
+          <div className="w-full max-w-4xl w-[95vw] mt-8 sm:mt-12 mb-10 sm:mb-14 text-center">
             <p className="text-gray-400 text-sm mb-2">Hvilket land har denne hovedstaden?</p>
             <p className="text-white text-3xl sm:text-4xl font-bold">{correctCapital}</p>
           </div>
         ) : isKidsMapQuiz(quizType) ? (
           /* Kids map quiz: Map + country name as question */
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-10 sm:mb-14">
+          <div className="w-full max-w-4xl w-[95vw] mb-10 sm:mb-14">
             <div className="aspect-video mb-2 rounded-lg overflow-hidden">
-              <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
+              <CountryMap highlightedCountry={currentCountry} width={672} height={378} />
             </div>
             <p className="text-white text-xl sm:text-2xl font-bold text-center">{correctAnswer}</p>
           </div>
         ) : isMapQuiz(quizType) ? (
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4 rounded-lg overflow-hidden">
-            <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
+          <div className="w-full max-w-4xl w-[95vw] aspect-video mb-2 sm:mb-4 rounded-lg overflow-hidden">
+            <CountryMap highlightedCountry={currentCountry} width={672} height={378} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
           </div>
         ) : (
-          <div className={`w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg rounded-lg overflow-hidden ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}>
+          <div className={`w-full max-w-4xl w-[95vw] rounded-lg overflow-hidden ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}>
             <img
               src={flagUrl}
               alt="Flagg"
@@ -1424,7 +1424,7 @@ export default function App() {
         {isCapitalInputQuiz(quizType) ? (
           /* Capital input quiz: Text input for capital name */
           <>
-            <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+            <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">
               <input
                 ref={inputRef}
                 type="text"
@@ -1445,14 +1445,14 @@ export default function App() {
 
             <button
               onClick={skipFlag}
-              className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
             >
               Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
             </button>
           </>
         ) : isCapitalChoiceQuiz(quizType) ? (
           /* Capital choice quiz: Mixed options (2x2 grid with name/flag/map) */
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-2 gap-3">
+          <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 grid grid-cols-2 gap-3">
             {currentOptions.filter(opt => opt in countryFlags).map((option, idx) => {
               const choiceType = capitalChoiceTypes[idx] || 'name'
               const optionFlagUrl = countryFlags[option as keyof typeof countryFlags]
@@ -1520,7 +1520,7 @@ export default function App() {
           </div>
         ) : isKidsMapQuiz(quizType) ? (
           /* Kids map quiz: Flag options (2x2 grid) */
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-2 gap-3">
+          <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 grid grid-cols-2 gap-3">
             {currentOptions.filter(opt => opt in countryFlags).map((option) => {
               const optionFlagUrl = countryFlags[option as keyof typeof countryFlags]
               const isSelected = selectedOption === option
@@ -1557,7 +1557,7 @@ export default function App() {
           </div>
         ) : isKidsFlagQuiz(quizType) ? (
           /* Kids flag quiz: Text buttons */
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             {currentOptions.filter(opt => opt in countryFlags && opt in norwegianNames).map((option) => {
               const optionName = norwegianNames[option]
               const isSelected = selectedOption === option
@@ -1593,7 +1593,7 @@ export default function App() {
         ) : (
           /* Normal mode: Text input */
           <>
-            <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+            <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">
               <input
                 ref={inputRef}
                 type="text"
@@ -1614,7 +1614,7 @@ export default function App() {
 
             <button
               onClick={skipFlag}
-              className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
             >
               Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
             </button>
