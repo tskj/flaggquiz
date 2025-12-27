@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Quiz types - flag quizzes and map quizzes
 export type QuizType =
   | 'world' | 'europe' | 'africa' | 'asia' | 'north-america' | 'south-america' | 'oceania' | 'territories'
-  | 'map-world' | 'map-europe' | 'map-africa' | 'map-asia' | 'map-north-america' | 'map-south-america' | 'map-oceania'
+  | 'map-world' | 'map-europe' | 'map-africa' | 'map-asia' | 'map-north-america' | 'map-south-america' | 'map-oceania' | 'map-territories'
 
 export const isMapQuiz = (type: QuizType): boolean => type.startsWith('map-')
 export const getBaseQuizType = (type: QuizType): QuizType =>
@@ -18,7 +18,7 @@ export const QuizSessionSchema = z.object({
   timeRemaining: z.number(),
   quizType: z.enum([
     'world', 'europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania', 'territories',
-    'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania'
+    'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania', 'map-territories'
   ]).default('world'),
 
   // Quiz configuration
@@ -123,6 +123,7 @@ export function getHighScores(): Record<QuizType, HighScore | null> {
     'map-north-america': null,
     'map-south-america': null,
     'map-oceania': null,
+    'map-territories': null,
   }
 
   for (const session of history.sessions) {

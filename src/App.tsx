@@ -61,11 +61,17 @@ export const oceanianCountries = [
   'Tuvalu', 'Vanuatu'
 ]
 
+// Territories that have map data in world-atlas (for map-territories quiz)
+export const mapTerritories = [
+  'Greenland', 'Palestine', 'Sahrawi Arab Democratic Republic'
+]
+
 // Norwegian names for disputed territories
 export const territoryNorwegianNames: Record<string, string> = {
   "Abkhazia": "Abkhasia",
   "Cook Islands": "Cookøyene",
   "England": "England",
+  "Greenland": "Grønland",
   "Niue": "Niue",
   "Northern Cyprus": "Nord-Kypros",
   "Northern Ireland": "Nord-Irland",
@@ -351,7 +357,7 @@ export default function App() {
       case 'north-america': return northAmericanCountries.length
       case 'south-america': return southAmericanCountries.length
       case 'oceania': return oceanianCountries.length
-      case 'territories': return Object.keys(territoryFlags).length
+      case 'territories': return isMapQuiz(type) ? mapTerritories.length : Object.keys(territoryFlags).length
       default: return Object.keys(countryFlags).length
     }
   }
@@ -366,7 +372,7 @@ export default function App() {
       case 'north-america': return prefix + 'Nord-Amerika'
       case 'south-america': return prefix + 'Sør-Amerika'
       case 'oceania': return prefix + 'Oseania'
-      case 'territories': return 'Ymse territorier'
+      case 'territories': return prefix + 'Ymse territorier'
       default: return prefix + 'Verden'
     }
   }
@@ -375,7 +381,7 @@ export default function App() {
   const totalFlags = getQuizCount(quizType)
   const baseQuizType = getBaseQuizType(quizType)
   const allNorwegianNames = baseQuizType === 'territories'
-    ? Object.keys(territoryFlags).map(c => territoryNorwegianNames[c] || c)
+    ? (isMapQuiz(quizType) ? mapTerritories : Object.keys(territoryFlags)).map(c => territoryNorwegianNames[c] || c)
     : Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
   // Track if session was already finished when loaded (to avoid duplicate history)
@@ -504,11 +510,14 @@ export default function App() {
       case 'north-america': countries = northAmericanCountries.filter(c => c in countryFlags); break
       case 'south-america': countries = southAmericanCountries.filter(c => c in countryFlags); break
       case 'oceania': countries = oceanianCountries.filter(c => c in countryFlags); break
-      case 'territories': countries = Object.keys(territoryFlags); break
+      case 'territories':
+        // For map quiz, only use territories with map data
+        countries = isMapQuiz(type) ? mapTerritories : Object.keys(territoryFlags)
+        break
       default: countries = Object.keys(countryFlags)
     }
-    // Filter out countries without map data for map quizzes
-    if (isMapQuiz(type)) {
+    // Filter out countries without map data for map quizzes (except territories which are already filtered)
+    if (isMapQuiz(type) && baseType !== 'territories') {
       countries = countries.filter(c => !countriesWithoutMapData.includes(c))
     }
     return countries
@@ -517,7 +526,7 @@ export default function App() {
   const getDefaultTime = (type: QuizType): number => {
     const baseType = getBaseQuizType(type)
     switch (baseType) {
-      case 'territories': return 3 * 60
+      case 'territories': return isMapQuiz(type) ? 1 * 60 : 3 * 60
       case 'oceania': return 5 * 60
       case 'south-america': return 5 * 60
       case 'north-america': return 8 * 60
@@ -720,6 +729,7 @@ export default function App() {
       { type: 'map-north-america', color: 'bg-orange-800 hover:bg-orange-900' },
       { type: 'map-south-america', color: 'bg-teal-800 hover:bg-teal-900' },
       { type: 'map-oceania', color: 'bg-cyan-800 hover:bg-cyan-900' },
+      { type: 'map-territories', color: 'bg-purple-800 hover:bg-purple-900' },
     ]
     const highScores = getHighScores()
 

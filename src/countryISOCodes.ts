@@ -208,6 +208,11 @@ export const countryToISO: Record<string, string> = {
   "Tonga": "776",
   "Tuvalu": "798",
   "Vanuatu": "548",
+
+  // Territories (for map-territories quiz)
+  "Greenland": "304",
+  "Palestine": "275",
+  "Sahrawi Arab Democratic Republic": "732",
 }
 
 // Reverse mapping: ISO code to country name
