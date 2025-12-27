@@ -242,18 +242,30 @@ function CountryMapInner({
   const { pathGenerator, projectionScale } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000 }
 
-    // Get the center of the country (use mainForProjection which is clipped for date-line countries)
-    const center = geoCentroid(polygonParts.mainForProjection)
     const paddingPx = 20
+
+    // Create a combined feature from all nearby polygons (mainland + nearby islands)
+    // This ensures we center on and fit all visible parts, not just the mainland
+    const allNearbyFeature: Feature<Geometry> = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: polygonParts.nearbyPolygons.map(p => p.geometry.coordinates)
+      }
+    }
+
+    // Center on all visible parts (fixes Greece, Malta, etc. where islands are close but off-center)
+    const center = geoCentroid(allNearbyFeature)
 
     // Use Azimuthal Equal-Area projection centered on the country
     // This gives accurate shapes and sizes, especially for polar countries
     // and automatically handles date-line crossing
     const projection = geoAzimuthalEqualArea()
-      .rotate([-center[0], -center[1]])  // Center on the country
+      .rotate([-center[0], -center[1]])  // Center on all visible parts
       .fitExtent(
         [[paddingPx, paddingPx], [width - paddingPx, height - paddingPx]],
-        polygonParts.mainForRendering
+        allNearbyFeature  // Fit to all visible parts
       )
 
     const currentScale = projection.scale()
