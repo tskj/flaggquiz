@@ -348,17 +348,21 @@ export default function App() {
     return norwegianNames[country] || country
   }
 
+  // Countries without map data in world-atlas (filtered out for map quizzes)
+  const countriesWithoutMapData = ['Kosovo']
+
   const getQuizCount = (type: QuizType): number => {
     const baseType = getBaseQuizType(type)
+    const mapFilter = isMapQuiz(type) ? countriesWithoutMapData.length : 0
     switch (baseType) {
-      case 'europe': return europeanCountries.length
-      case 'africa': return africanCountries.length
-      case 'asia': return asianCountries.length
-      case 'north-america': return northAmericanCountries.length
-      case 'south-america': return southAmericanCountries.length
-      case 'oceania': return oceanianCountries.length
+      case 'europe': return europeanCountries.length - (isMapQuiz(type) ? countriesWithoutMapData.filter(c => europeanCountries.includes(c)).length : 0)
+      case 'africa': return africanCountries.length - (isMapQuiz(type) ? countriesWithoutMapData.filter(c => africanCountries.includes(c)).length : 0)
+      case 'asia': return asianCountries.length - (isMapQuiz(type) ? countriesWithoutMapData.filter(c => asianCountries.includes(c)).length : 0)
+      case 'north-america': return northAmericanCountries.length - (isMapQuiz(type) ? countriesWithoutMapData.filter(c => northAmericanCountries.includes(c)).length : 0)
+      case 'south-america': return southAmericanCountries.length - (isMapQuiz(type) ? countriesWithoutMapData.filter(c => southAmericanCountries.includes(c)).length : 0)
+      case 'oceania': return oceanianCountries.length - (isMapQuiz(type) ? countriesWithoutMapData.filter(c => oceanianCountries.includes(c)).length : 0)
       case 'territories': return isMapQuiz(type) ? mapTerritories.length : Object.keys(territoryFlags).length
-      default: return Object.keys(countryFlags).length
+      default: return Object.keys(countryFlags).length - mapFilter
     }
   }
 
@@ -508,10 +512,6 @@ export default function App() {
       inputRef.current.focus({ preventScroll: true })
     }
   }, [quizStarted, quizFinished, currentIndex, hasSeenAll])
-
-
-  // Countries without map data in world-atlas (political reasons)
-  const countriesWithoutMapData = ['Kosovo']
 
   const getCountriesForType = (type: QuizType): string[] => {
     const baseType = getBaseQuizType(type)
