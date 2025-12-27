@@ -1175,9 +1175,19 @@ export default function App() {
     const activeTab = resultsTab ?? defaultTab
 
     // Select which flags to display based on active tab
-    const displayFlags = activeTab === 'all' ? quizOrder
-      : activeTab === 'wrong' ? wrongFlags
-      : practiceFlags
+    // Sort so unreached flags appear at the end (they shouldn't be mixed with seen flags)
+    const sortByReached = (flags: string[]) =>
+      [...flags].sort((a, b) => {
+        const aReached = !unreachedFlags.has(a)
+        const bReached = !unreachedFlags.has(b)
+        if (aReached && !bReached) return -1
+        if (!aReached && bReached) return 1
+        return 0
+      })
+
+    const displayFlags = activeTab === 'all' ? sortByReached(quizOrder)
+      : activeTab === 'wrong' ? sortByReached(wrongFlags)
+      : sortByReached(practiceFlags)
 
     const quizTypeName = getQuizTypeName(quizType)
 
