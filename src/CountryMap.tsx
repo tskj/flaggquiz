@@ -341,7 +341,7 @@ function CountryMapInner({
   const { pathGenerator, projectionScale, projection } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000, projection: null }
 
-    const paddingPx = 20
+    const paddingPx = 10  // Reduced padding to use more screen space
 
     // Get the main polygon's area for filtering
     const mainArea = geoArea(polygonParts.nearbyPolygons[0])
@@ -633,7 +633,7 @@ function CountryMapInner({
   // Calculate stroke width based on projection scale
   // Low scale (zoomed out) = thinner strokes, high scale (zoomed in) = normal strokes
   const strokeWidth = useMemo(() => {
-    const baseStroke = mode === 'overview' ? 3.0 : 1.8
+    const baseStroke = mode === 'overview' ? 3.0 : 2.5
     const referenceScale = 3000
     // Clamp to reasonable range to avoid too thin or too thick strokes
     return Math.max(0.8, Math.min(baseStroke, baseStroke * (projectionScale / referenceScale)))

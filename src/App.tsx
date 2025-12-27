@@ -909,7 +909,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col p-2 sm:p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
       <div className="flex-1 flex flex-col items-center pt-1 sm:pt-4 lg:pt-8">
-        <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg mb-1 sm:mb-2">
+        <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-1 sm:mb-2">
           <div className="flex justify-between items-center mb-1">
             {!practiceMode && <span className="text-white text-lg sm:text-xl lg:text-2xl font-mono">{formatTime(timeRemaining)}</span>}
             <span className={`text-green-500 text-base sm:text-lg lg:text-xl font-bold ${practiceMode ? 'ml-auto' : ''}`}>{completedCount} riktige</span>
@@ -940,18 +940,18 @@ export default function App() {
         </div>
 
         {isMapQuiz(quizType) ? (
-          <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 mb-2 sm:mb-4 flex items-center justify-center">
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4">
             <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
           </div>
         ) : (
           <img
             src={flagUrl}
             alt="Flagg"
-            className="w-full max-w-xs sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 object-contain mb-2 sm:mb-4"
+            className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 object-contain mb-2 sm:mb-4"
           />
         )}
 
-        <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+        <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
           <input
             ref={inputRef}
             type="text"
@@ -972,7 +972,7 @@ export default function App() {
 
         <button
           onClick={skipFlag}
-          className="w-full max-w-xs sm:max-w-sm lg:max-w-lg bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+          className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
         >
           Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
         </button>
