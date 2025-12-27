@@ -102,7 +102,7 @@ export function PrerenderedCountryMap({
           src={imageUrl}
           alt={highlightedCountry}
           className="w-full h-full object-cover"
-          style={{ cursor: allowZoomToggle && mode === 'quiz' ? 'pointer' : 'default' }}
+          style={{ cursor: allowZoomToggle && mode === 'quiz' ? 'pointer' : 'inherit' }}
           onClick={handleClick}
           onError={() => setImageError(true)}
         />

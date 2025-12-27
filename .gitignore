@@ -2,3 +2,7 @@ node_modules
 dist
 .DS_Store
 public/maps
+public/flags
+src/localFlags.json
+src/localTerritoryFlags.json
+src/capitalScreenPositions.json

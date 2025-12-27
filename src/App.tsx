@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import countryFlags from '../country-flags.json'
-import territoryFlags from '../disputed-territories.json'
+import localCountryFlags from './localFlags.json'
+import localTerritoryFlags from './localTerritoryFlags.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
 import { preloadMapData } from './CountryMap'
@@ -11,6 +11,18 @@ import { getFlagFocalPoint } from './flagFocalPoints'
 
 // Start preloading map data immediately
 preloadMapData()
+
+// Prepend base URL to flag paths for production builds
+const base = import.meta.env.BASE_URL || '/'
+function withBase(flags: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(flags)) {
+    result[key] = `${base}${value}`
+  }
+  return result
+}
+const countryFlags = withBase(localCountryFlags)
+const territoryFlags = withBase(localTerritoryFlags)
 
 // Countries by continent (English names matching country-flags.json keys)
 export const europeanCountries = [
@@ -496,6 +508,29 @@ export default function App() {
     }
   }, [isLoading, sessionId, buildSession])
 
+  // Preload current and upcoming flags/maps to avoid jank between questions
+  useEffect(() => {
+    if (!quizStarted || quizFinished) return
+
+    // Preload current flag and next 3 in queue
+    const countriesToPreload = currentQueue.slice(currentIndex, currentIndex + 4)
+    countriesToPreload.forEach(country => {
+      // Preload flag
+      const flagUrl = currentFlags[country as keyof typeof currentFlags]
+      if (flagUrl) {
+        const img = new Image()
+        img.src = flagUrl
+      }
+      // Preload map (both variants for quiz mode)
+      const safeName = country.replace(/[^a-zA-Z0-9-]/g, '_')
+      const base = import.meta.env.BASE_URL || '/'
+      const mapDefault = new Image()
+      mapDefault.src = `${base}maps/${safeName}-672x378-quiz-default.png`
+      const mapZoomed = new Image()
+      mapZoomed.src = `${base}maps/${safeName}-672x378-quiz-zoomed-out.png`
+    })
+  }, [quizStarted, quizFinished, currentQueue, currentIndex, currentFlags])
+
   // Move to history when quiz finishes (but keep active session for refresh)
   // Skip for practice mode - no history tracking
   useEffect(() => {
@@ -588,6 +623,17 @@ export default function App() {
     return [0, 1, 2, 3].map(() => types[Math.floor(Math.random() * types.length)])
   }
 
+  // Preload flags for a list of countries
+  const preloadFlags = (countries: string[]) => {
+    countries.forEach(country => {
+      const flagUrl = countryFlags[country as keyof typeof countryFlags]
+      if (flagUrl) {
+        const img = new Image()
+        img.src = flagUrl
+      }
+    })
+  }
+
   const startQuiz = (type: QuizType = 'world') => {
     clearActiveSession()
     const isKids = isKidsQuiz(type)
@@ -609,6 +655,9 @@ export default function App() {
       allCountries = getCountriesForType(type)
     }
     const shuffled = shuffleArray(allCountries)
+
+    // Preload first few flags immediately before showing quiz
+    preloadFlags(shuffled.slice(0, 5))
     const newSessionId = Date.now().toString()
     // Kids mode times: Europe 10 min, World 35 min
     // Capital quiz times: input 10 min, choice 5 min
@@ -1210,40 +1259,44 @@ export default function App() {
           <p className="text-gray-400 text-xl mb-4">
             Du klarte {completedCount} av {totalFlags} {isMapQuiz(quizType) ? 'land' : 'flagg'}
           </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => startQuiz(quizType)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
-            >
-              Prøv igjen
-            </button>
-            <button
-              onClick={goToStartScreen}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg"
-            >
-              Velg quiz
-            </button>
-          </div>
+          <button
+            onClick={goToStartScreen}
+            className="text-gray-400 hover:text-gray-300 text-sm underline"
+          >
+            ← Tilbake til oversikt
+          </button>
         </div>
 
-        <div className="flex justify-center mb-4">
+        <div className="relative max-w-4xl mx-auto w-full mb-4">
+          <div className="flex justify-center">
+            <button
+              onClick={() => setResultsTab('wrong')}
+              className={`px-4 py-2 rounded-l-lg ${activeTab === 'wrong' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+            >
+              Feil ({wrongFlags.length})
+            </button>
+            <button
+              onClick={() => setResultsTab('practice')}
+              className={`px-4 py-2 ${activeTab === 'practice' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+            >
+              Øve på ({practiceFlags.length})
+            </button>
+            <button
+              onClick={() => setResultsTab('all')}
+              className={`px-4 py-2 rounded-r-lg ${activeTab === 'all' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+            >
+              Alle ({totalFlags})
+            </button>
+          </div>
           <button
-            onClick={() => setResultsTab('wrong')}
-            className={`px-4 py-2 rounded-l-lg ${activeTab === 'wrong' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+            onClick={() => startQuiz(quizType)}
+            className="absolute right-0 top-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg flex items-center gap-2"
+            title="Prøv igjen"
           >
-            Feil ({wrongFlags.length})
-          </button>
-          <button
-            onClick={() => setResultsTab('practice')}
-            className={`px-4 py-2 ${activeTab === 'practice' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
-          >
-            Øve på ({practiceFlags.length})
-          </button>
-          <button
-            onClick={() => setResultsTab('all')}
-            className={`px-4 py-2 rounded-r-lg ${activeTab === 'all' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
-          >
-            Alle ({totalFlags})
+            <svg className="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="hidden sm:inline">Prøv igjen</span>
           </button>
         </div>
 
@@ -1282,7 +1335,7 @@ export default function App() {
                   {isCapitalQuiz(quizType) ? (
                     // Capital quiz: show flag + country name + capital
                     <>
-                      <div className="w-full aspect-[3/2] relative">
+                      <div className="w-full aspect-[3/2] relative overflow-hidden">
                         <img
                           src={flagUrl}
                           alt={name}
@@ -1307,7 +1360,7 @@ export default function App() {
                   ) : isMapQuiz(quizType) && !isKidsQuiz(quizType) ? (
                     // Map quiz: show map thumbnail
                     <>
-                      <div className="w-full aspect-[3/2]">
+                      <div className="w-full aspect-[3/2] overflow-hidden">
                         <PrerenderedCountryMap highlightedCountry={country} width={128} height={85} mode="overview" />
                       </div>
                       <div className="px-2 py-2 flex flex-col items-center">
@@ -1324,7 +1377,7 @@ export default function App() {
                   ) : (
                     // Flag quiz: show flag
                     <>
-                      <div className="w-full aspect-[3/2]">
+                      <div className="w-full aspect-[3/2] overflow-hidden">
                         <img
                           src={flagUrl}
                           alt={name}
@@ -1378,16 +1431,17 @@ export default function App() {
                 // After seeing all, show total incorrect remaining (updates immediately on correct answer)
                 (() => {
                   const totalIncorrect = quizOrder.filter(f => !correctFlags.has(f)).length
+                  const wrongLabel = isCapitalChoiceQuiz(quizType) ? 'feil' : 'hoppet over'
                   return (
                     <span className={totalIncorrect === 1 ? 'text-gray-400' : 'text-yellow-500'}>
-                      {totalIncorrect === 1 ? 'Siste!' : `${totalIncorrect} hoppet over`}
+                      {totalIncorrect === 1 ? 'Siste!' : `${totalIncorrect} ${wrongLabel}`}
                     </span>
                   )
                 })()
               ) : (
                 <>
                   <span className="text-gray-400">{remainingText}</span>
-                  {skippedThisPass > 0 && (
+                  {skippedThisPass > 0 && !isCapitalChoiceQuiz(quizType) && (
                     <span className="text-yellow-500">{skippedThisPass} hoppet over</span>
                   )}
                 </>
@@ -1398,7 +1452,7 @@ export default function App() {
 
         {isCapitalInputQuiz(quizType) ? (
           /* Capital input quiz: Map with flag overlay + country name as question */
-          <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">
+          <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 typing-quiz-question ${justAnswered ? 'typing-quiz-question-answered' : ''}`}>
             <div className="relative aspect-video mb-3 rounded-lg overflow-hidden">
               <PrerenderedCountryMap highlightedCountry={currentCountry} width={672} height={378} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
               <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg bg-gray-800">
@@ -1414,28 +1468,35 @@ export default function App() {
           </div>
         ) : isCapitalChoiceQuiz(quizType) ? (
           /* Capital choice quiz: Capital name as question */
-          <div className="w-full max-w-4xl w-[95vw] mt-8 sm:mt-12 mb-10 sm:mb-14 text-center">
+          <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] mt-8 sm:mt-12 mb-10 sm:mb-14 text-center animate-fade-slide-in ${justAnswered ? (selectedOption === currentCountry ? 'quiz-question-fade-correct' : 'quiz-question-fade-wrong') : ''}`}>
             <p className="text-gray-400 text-sm mb-2">Hvilket land har denne hovedstaden?</p>
             <p className="text-white text-3xl sm:text-4xl font-bold">{correctCapital}</p>
           </div>
         ) : isKidsMapQuiz(quizType) ? (
           /* Kids map quiz: Map + country name as question */
-          <div className="w-full max-w-4xl w-[95vw] mb-10 sm:mb-14">
+          <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] mb-10 sm:mb-14 animate-scale-in ${justAnswered ? (selectedOption === currentCountry ? 'quiz-question-fade-correct' : 'quiz-question-fade-wrong') : ''}`}>
             <div className="aspect-video mb-2 rounded-lg overflow-hidden">
               <PrerenderedCountryMap highlightedCountry={currentCountry} width={672} height={378} mode="quiz" />
             </div>
             <p className="text-white text-xl sm:text-2xl font-bold text-center">{correctAnswer}</p>
           </div>
         ) : isMapQuiz(quizType) ? (
-          <div className="w-full max-w-4xl w-[95vw] aspect-video mb-2 sm:mb-4 rounded-lg overflow-hidden">
+          <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] aspect-video mb-2 sm:mb-4 rounded-lg overflow-hidden typing-quiz-question ${justAnswered ? 'typing-quiz-question-answered' : ''}`}>
             <PrerenderedCountryMap highlightedCountry={currentCountry} width={672} height={378} mode="quiz" allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
           </div>
         ) : (
-          <div className={`w-full max-w-4xl w-[95vw] rounded-lg overflow-hidden ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}>
+          <div
+            key={currentCountry}
+            className={`w-full max-w-4xl w-[95vw] aspect-[3/2] flex items-center justify-center ${
+              isKidsFlagQuiz(quizType)
+                ? `mb-10 sm:mb-14 animate-scale-in ${justAnswered ? (selectedOption === currentCountry ? 'quiz-question-fade-correct' : 'quiz-question-fade-wrong') : ''}`
+                : `mb-2 sm:mb-4 typing-quiz-question ${justAnswered ? 'typing-quiz-question-answered' : ''}`
+            }`}
+          >
             <img
               src={flagUrl}
               alt="Flagg"
-              className="w-full h-auto"
+              className="max-w-full max-h-full rounded-lg"
             />
           </div>
         )}
@@ -1451,10 +1512,10 @@ export default function App() {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Skriv hovedstadens navn..."
-                className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 ${
+                className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 border-2 ${
                   justAnswered
-                    ? 'bg-green-600 border-green-500 border-2 font-bold'
-                    : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
+                    ? 'bg-green-600 border-green-500 font-bold input-success'
+                    : 'bg-gray-900 border-gray-700 focus:border-blue-500'
                 }`}
                 autoComplete="off"
                 autoCapitalize="off"
@@ -1464,7 +1525,8 @@ export default function App() {
 
             <button
               onClick={skipFlag}
-              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+              disabled={justAnswered}
+              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 disabled:hover:bg-gray-700 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
             >
               Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
             </button>
@@ -1480,25 +1542,31 @@ export default function App() {
               const isCorrectOption = option === currentCountry
               const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
 
-              let borderClass = ''
+              // Green/red ring for correct/wrong answers
+              let ringClass = ''
               if (justAnswered) {
                 if (isSelected && isCorrectOption) {
-                  borderClass = 'ring-4 ring-green-400'
+                  ringClass = 'ring-4 ring-green-400'
                 } else if (isSelected && !isCorrectOption) {
-                  borderClass = 'ring-4 ring-red-400'
+                  ringClass = 'ring-4 ring-red-400'
                 } else if (wasWrongAnswer && isCorrectOption) {
-                  borderClass = 'ring-4 ring-green-400'
+                  ringClass = 'ring-4 ring-green-400'
                 }
               }
 
-              // All button types share same aspect ratio and size
-              const buttonClass = `${borderClass} rounded-xl overflow-hidden transition-colors duration-150 aspect-[3/2]`
+              // All button types share same aspect ratio and size + animation
+              const delayClass = `animate-delay-${idx + 1}`
+              // Fade out buttons that are neither selected nor correct
+              const feedbackClass = justAnswered
+                ? (isSelected || isCorrectOption ? 'quiz-option-selected' : 'quiz-option-unselected')
+                : ''
+              const buttonClass = `${ringClass} rounded-xl overflow-hidden aspect-[3/2] animate-fade-in ${delayClass} ${feedbackClass} quiz-option-hover`
 
               // Render different content based on choice type
               if (choiceType === 'flag') {
                 return (
                   <button
-                    key={option}
+                    key={`${currentCountry}-${option}`}
                     onClick={() => handleCapitalChoiceClick(option)}
                     disabled={justAnswered}
                     className={buttonClass}
@@ -1514,10 +1582,10 @@ export default function App() {
               } else if (choiceType === 'map') {
                 return (
                   <button
-                    key={option}
+                    key={`${currentCountry}-${option}`}
                     onClick={() => handleCapitalChoiceClick(option)}
                     disabled={justAnswered}
-                    className={buttonClass}
+                    className={`${buttonClass} cursor-pointer`}
                   >
                     <PrerenderedCountryMap highlightedCountry={option} width={200} height={133} mode="overview" />
                   </button>
@@ -1526,7 +1594,7 @@ export default function App() {
                 // 'name'
                 return (
                   <button
-                    key={option}
+                    key={`${currentCountry}-${option}`}
                     onClick={() => handleCapitalChoiceClick(option)}
                     disabled={justAnswered}
                     className={`${buttonClass} bg-gray-800 hover:bg-gray-700 flex items-center justify-center`}
@@ -1540,29 +1608,36 @@ export default function App() {
         ) : isKidsMapQuiz(quizType) ? (
           /* Kids map quiz: Flag options (2x2 grid) */
           <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 grid grid-cols-2 gap-3">
-            {currentOptions.filter(opt => opt in countryFlags).map((option) => {
+            {currentOptions.filter(opt => opt in countryFlags).map((option, idx) => {
               const optionFlagUrl = countryFlags[option as keyof typeof countryFlags]
               const isSelected = selectedOption === option
               const isCorrectOption = option === currentCountry
               const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
 
-              let borderClass = ''
+              // Green/red ring for correct/wrong answers
+              let ringClass = ''
               if (justAnswered) {
                 if (isSelected && isCorrectOption) {
-                  borderClass = 'ring-4 ring-green-400'
+                  ringClass = 'ring-4 ring-green-400'
                 } else if (isSelected && !isCorrectOption) {
-                  borderClass = 'ring-4 ring-red-400'
+                  ringClass = 'ring-4 ring-red-400'
                 } else if (wasWrongAnswer && isCorrectOption) {
-                  borderClass = 'ring-4 ring-green-400'
+                  ringClass = 'ring-4 ring-green-400'
                 }
               }
 
+              const delayClass = `animate-delay-${idx + 1}`
+              // Fade out buttons that are neither selected nor correct
+              const feedbackClass = justAnswered
+                ? (isSelected || isCorrectOption ? 'quiz-option-selected' : 'quiz-option-unselected')
+                : ''
+
               return (
                 <button
-                  key={option}
+                  key={`${currentCountry}-${option}`}
                   onClick={() => handleKidsOptionClick(option)}
                   disabled={justAnswered}
-                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
+                  className={`${ringClass} rounded-xl overflow-hidden h-32 sm:h-36 animate-fade-in ${delayClass} ${feedbackClass} quiz-option-hover`}
                 >
                   <img
                     src={optionFlagUrl}
@@ -1577,32 +1652,38 @@ export default function App() {
         ) : isKidsFlagQuiz(quizType) ? (
           /* Kids flag quiz: Text buttons */
           <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {currentOptions.filter(opt => opt in countryFlags && opt in norwegianNames).map((option) => {
+            {currentOptions.filter(opt => opt in countryFlags && opt in norwegianNames).map((option, idx) => {
               const optionName = norwegianNames[option]
               const isSelected = selectedOption === option
               const isCorrectOption = option === currentCountry
               const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
 
-              let buttonClass = 'bg-gray-800 hover:bg-gray-700 border-2 border-gray-600'
+              let buttonClass = 'bg-gray-800 hover:bg-gray-700'
               if (justAnswered) {
                 if (isSelected && isCorrectOption) {
                   // Selected the correct answer
-                  buttonClass = 'bg-green-600 border-2 border-green-400'
+                  buttonClass = 'bg-green-600'
                 } else if (isSelected && !isCorrectOption) {
                   // Selected wrong answer - show red
-                  buttonClass = 'bg-red-600 border-2 border-red-400'
+                  buttonClass = 'bg-red-600'
                 } else if (wasWrongAnswer && isCorrectOption) {
                   // Show correct answer in green when wrong was selected
-                  buttonClass = 'bg-green-600 border-2 border-green-400'
+                  buttonClass = 'bg-green-600'
                 }
               }
 
+              const delayClass = `animate-delay-${idx + 1}`
+              // Fade out buttons that are neither selected nor correct
+              const feedbackClass = justAnswered
+                ? (isSelected || isCorrectOption ? 'quiz-option-selected' : 'quiz-option-unselected')
+                : ''
+
               return (
                 <button
-                  key={option}
+                  key={`${currentCountry}-${option}`}
                   onClick={() => handleKidsOptionClick(option)}
                   disabled={justAnswered}
-                  className={`${buttonClass} text-white font-bold py-4 px-4 rounded-xl text-lg transition-colors duration-150`}
+                  className={`${buttonClass} text-white font-bold py-4 px-4 rounded-xl text-lg animate-fade-in ${delayClass} ${feedbackClass} quiz-option-hover`}
                 >
                   {optionName}
                 </button>
@@ -1620,10 +1701,10 @@ export default function App() {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Skriv landets navn..."
-                className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 ${
+                className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 border-2 ${
                   justAnswered
-                    ? 'bg-green-600 border-green-500 border-2 font-bold'
-                    : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
+                    ? 'bg-green-600 border-green-500 font-bold input-success'
+                    : 'bg-gray-900 border-gray-700 focus:border-blue-500'
                 }`}
                 autoComplete="off"
                 autoCapitalize="off"
@@ -1633,7 +1714,8 @@ export default function App() {
 
             <button
               onClick={skipFlag}
-              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+              disabled={justAnswered}
+              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 disabled:hover:bg-gray-700 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
             >
               Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
             </button>
@@ -1645,18 +1727,24 @@ export default function App() {
             onClick={goToStartScreen}
             className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
           >
-            Alle quizer
+            ← Tilbake til oversikt
           </button>
           <button
             onClick={giveUp}
-            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
+            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline inline-flex items-center gap-1"
           >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
             Gi opp
           </button>
           <button
             onClick={() => startQuiz(quizType)}
-            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
+            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline inline-flex items-center gap-1"
           >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
             Start på nytt
           </button>
         </div>

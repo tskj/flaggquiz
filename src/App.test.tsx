@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { norwegianNames } from './App'
-import countryFlags from '../country-flags.json'
+import countryFlags from './localFlags.json'
 
 // Get all countries and their Norwegian names
 const allCountries = Object.keys(countryFlags)
