@@ -948,7 +948,7 @@ export default function App() {
 
         {isMapQuiz(quizType) ? (
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4">
-            <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={!practiceMode} />
+            <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={!practiceMode} onMapClick={() => inputRef.current?.focus()} />
           </div>
         ) : (
           <img
@@ -985,6 +985,12 @@ export default function App() {
         </button>
 
         <div className="flex gap-4">
+          <button
+            onClick={goToStartScreen}
+            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
+          >
+            Alle quizer
+          </button>
           <button
             onClick={giveUp}
             className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"

@@ -248,6 +248,7 @@ interface CountryMapProps {
   height?: number
   mode?: 'quiz' | 'overview' // quiz = show neighbors, overview = zoomed in on country
   allowZoomToggle?: boolean // Whether clicking toggles zoom (disabled in practice mode)
+  onMapClick?: () => void // Called after map click (e.g., to refocus input)
 }
 
 interface CountryFeature extends Feature<Geometry> {
@@ -267,6 +268,7 @@ function CountryMapInner({
   height = 300,
   mode = 'quiz',
   allowZoomToggle = true,
+  onMapClick,
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview fits country to box
   const baseZoomFactor = mode === 'overview' ? 1.0 : 0.5
@@ -678,6 +680,7 @@ function CountryMapInner({
         } else {
           setZoomedOutForContext(prev => !prev)
         }
+        onMapClick?.()
       }
     : undefined
 
