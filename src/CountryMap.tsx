@@ -53,7 +53,6 @@ function CountryMapInner({
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview zooms in on the country
   const zoomFactor = mode === 'overview' ? 3.5 : 0.5
-  const strokeWidth = mode === 'overview' ? 0.5 : 1
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
@@ -93,8 +92,8 @@ function CountryMapInner({
     [countries10m, targetISO]
   )
 
-  const pathGenerator = useMemo(() => {
-    if (!targetFeature50m) return null
+  const { pathGenerator, projectionScale } = useMemo(() => {
+    if (!targetFeature50m) return { pathGenerator: null, projectionScale: 1000 }
 
     const center = geoCentroid(targetFeature50m)
     const paddingPx = 20
@@ -105,11 +104,12 @@ function CountryMapInner({
       )
 
     const currentScale = projection.scale()
-    projection.scale(currentScale * zoomFactor)
+    const finalScale = currentScale * zoomFactor
+    projection.scale(finalScale)
     projection.center(center)
     projection.translate([width / 2, height / 2])
 
-    return geoPath(projection)
+    return { pathGenerator: geoPath(projection), projectionScale: finalScale }
   }, [targetFeature50m, width, height, zoomFactor])
 
   const neighborPaths = useMemo(() => {
@@ -143,6 +143,15 @@ function CountryMapInner({
 
     return pathGenerator(featureToRender) || ''
   }, [pathGenerator, targetFeature10m, targetFeature50m])
+
+  // Calculate stroke width based on projection scale
+  // Low scale (zoomed out) = thinner strokes, high scale (zoomed in) = normal strokes
+  const strokeWidth = useMemo(() => {
+    const baseStroke = mode === 'overview' ? 3.0 : 1.8
+    const referenceScale = 3000
+    // Clamp to reasonable range to avoid too thin or too thick strokes
+    return Math.max(0.8, Math.min(baseStroke, baseStroke * (projectionScale / referenceScale)))
+  }, [mode, projectionScale])
 
   // Early returns after all hooks
   if (loading) {
@@ -192,8 +201,6 @@ function CountryMapInner({
       <path
         d={targetPath}
         fill="#4ade80"
-        stroke="#1a3a5c"
-        strokeWidth={strokeWidth}
       />
     </svg>
   )
