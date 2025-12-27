@@ -66,13 +66,13 @@ async function main() {
 
   console.log(`\nGenerating maps for ${countries.length} countries...`)
 
-  // Use 50m data for neighbors (simpler, faster rendering)
+  // Use 50m for neighbors - simpler and no corrupted polygon issues
   const neighborFeatures = geoData50m.features as Feature<Geometry>[]
 
   for (const country of countries) {
     const iso = countryToISO[country]
 
-    // Try 10m (high res) first for target country, fall back to 50m
+    // Always prefer 10m data (more detailed), fall back to 50m
     let countryFeature = geoData10m.features.find(f => f.id === iso) as Feature<Geometry> | undefined
     if (!countryFeature) {
       countryFeature = geoData50m.features.find(f => f.id === iso) as Feature<Geometry> | undefined

@@ -18,6 +18,7 @@ export const countriesNeedingExtraZoom: Record<string, number> = {
   'Kiribati': 6.0,
   'Tuvalu': 4.0,
   'Marshall Islands': 4.0,
+  'Maldives': 5.0,
 }
 
 export interface PolygonParts {
@@ -111,6 +112,18 @@ export function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
   const geom = feat.geometry
   if (geom.type === 'Polygon') {
     const poly = feat as Feature<Polygon>
+    // Filter out corrupted polygons (area > 1 steradian is bogus data)
+    if (geoArea(poly) > 1) {
+      return {
+        mainForProjection: poly,
+        mainForRendering: poly,
+        nearbyPolygons: [],
+        tinyDistantIslands: [],
+        insets: [],
+        insetGroups: [],
+        spansDateLine: false
+      }
+    }
     return {
       mainForProjection: poly,
       mainForRendering: poly,
@@ -122,14 +135,17 @@ export function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
     }
   }
   if (geom.type === 'MultiPolygon') {
-    const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates.map(coords => {
-      const poly: Feature<Polygon> = {
-        type: 'Feature',
-        properties: feat.properties,
-        geometry: { type: 'Polygon', coordinates: coords }
-      }
-      return { poly, area: geoArea(poly) }
-    })
+    // Filter out corrupted polygons (area > 1 steradian is bogus data covering hemispheres)
+    const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates
+      .map(coords => {
+        const poly: Feature<Polygon> = {
+          type: 'Feature',
+          properties: feat.properties,
+          geometry: { type: 'Polygon', coordinates: coords }
+        }
+        return { poly, area: geoArea(poly) }
+      })
+      .filter(({ area }) => area < 1) // Remove bogus hemisphere-covering polygons
 
     polygons.sort((a, b) => b.area - a.area)
 
@@ -290,7 +306,7 @@ export function renderMapToSVG(
   const referenceScale = 3000
   const strokeWidth = Math.max(0.8, Math.min(baseStroke, baseStroke * (finalScale / referenceScale))) * scaleFactor
 
-  // Generate neighbor paths
+  // Generate neighbor paths (using 50m data which has no corruption issues)
   const neighborPaths = neighborFeatures
     .filter(f => (f as { id?: string }).id !== targetISO)
     .map(f => pathGenerator(f))

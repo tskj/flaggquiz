@@ -104,6 +104,18 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
   const geom = feat.geometry
   if (geom.type === 'Polygon') {
     const poly = feat as Feature<Polygon>
+    // Filter out corrupted polygons (area > 1 steradian is bogus data)
+    if (geoArea(poly) > 1) {
+      return {
+        mainForProjection: poly,
+        mainForRendering: poly,
+        nearbyPolygons: [],
+        tinyDistantIslands: [],
+        insets: [],
+        insetGroups: [],
+        spansDateLine: false
+      }
+    }
     return {
       mainForProjection: poly,
       mainForRendering: poly,
@@ -115,15 +127,17 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
     }
   }
   if (geom.type === 'MultiPolygon') {
-    // Calculate area for each polygon
-    const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates.map(coords => {
-      const poly: Feature<Polygon> = {
-        type: 'Feature',
-        properties: feat.properties,
-        geometry: { type: 'Polygon', coordinates: coords }
-      }
-      return { poly, area: geoArea(poly) }
-    })
+    // Filter out corrupted polygons (area > 1 steradian is bogus data covering hemispheres)
+    const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates
+      .map(coords => {
+        const poly: Feature<Polygon> = {
+          type: 'Feature',
+          properties: feat.properties,
+          geometry: { type: 'Polygon', coordinates: coords }
+        }
+        return { poly, area: geoArea(poly) }
+      })
+      .filter(({ area }) => area < 1) // Remove bogus hemisphere-covering polygons
 
     // Sort by area descending
     polygons.sort((a, b) => b.area - a.area)
@@ -266,6 +280,7 @@ const countriesNeedingExtraZoom: Record<string, number> = {
   'Kiribati': 6.0,
   'Tuvalu': 4.0,
   'Marshall Islands': 4.0,
+  'Maldives': 5.0,
 }
 
 // Fixed global zoom level for "see where in the world" view
@@ -337,29 +352,12 @@ function CountryMapInner({
   )
 
   // Split country into main polygon and distant insets (overseas territories)
-  // Use 10m data for quiz mode (more accurate for island nations like Maldives)
-  // Use 50m data for overview/thumbnail mode (simpler, better for small displays)
-  // Fallback to 10m if country only exists there (e.g., Tuvalu)
+  // Always prefer 10m data (more detailed), fall back to 50m
   const polygonParts = useMemo(() => {
-    // For overview mode (thumbnails), prefer simpler 50m data but fallback to 10m
-    if (mode === 'overview') {
-      if (targetFeature50m) return getPolygonParts(targetFeature50m)
-      if (targetFeature10m) return getPolygonParts(targetFeature10m)
-      return null
-    }
-    // For quiz mode, prefer 10m data - it's more accurate for island nations
-    if (targetFeature10m) {
-      const bounds = geoBounds(targetFeature10m)
-      const lngSpan = bounds[1][0] - bounds[0][0]
-      const latSpan = bounds[1][1] - bounds[0][1]
-      // Use 10m if it has meaningful extent
-      if (lngSpan > 0.001 && latSpan > 0.001) {
-        return getPolygonParts(targetFeature10m)
-      }
-    }
-    if (!targetFeature50m) return null
-    return getPolygonParts(targetFeature50m)
-  }, [targetFeature50m, targetFeature10m, mode])
+    if (targetFeature10m) return getPolygonParts(targetFeature10m)
+    if (targetFeature50m) return getPolygonParts(targetFeature50m)
+    return null
+  }, [targetFeature50m, targetFeature10m])
 
   // Check if this country has insets
   const hasInsets = !forceNoInsets && polygonParts?.insets && polygonParts.insets.length > 0
@@ -429,6 +427,7 @@ function CountryMapInner({
   }, [polygonParts, width, height, zoomFactor, showInsets, useGlobalZoom, mode, extraZoom])
 
   const neighborPaths = useMemo(() => {
+    // Use 50m for neighbors - simpler and no corrupted polygon issues
     if (!countries50m || !pathGenerator) return []
     return countries50m.features
       .filter((f) => (f as CountryFeature).id !== targetISO)
