@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
 import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
-import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, type QuizSession, type QuizType } from './storage'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, type QuizSession, type QuizType } from './storage'
 
 // Countries by continent (English names matching country-flags.json keys)
 export const europeanCountries = [
@@ -685,6 +685,7 @@ export default function App() {
       { type: 'oceania', color: 'bg-cyan-600 hover:bg-cyan-700' },
       { type: 'territories', color: 'bg-purple-600 hover:bg-purple-700' },
     ]
+    const highScores = getHighScores()
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
@@ -699,19 +700,27 @@ export default function App() {
           <span className="text-gray-300">Uten tidsbegrensning</span>
         </label>
         <div className="grid grid-cols-2 gap-3 w-full max-w-md">
-          {quizOptions.map(({ type, color }) => (
-            <button
-              key={type}
-              onClick={() => startQuiz(type)}
-              className={`${color} text-white font-bold py-3 px-4 rounded-lg text-lg`}
-            >
-              {getQuizTypeName(type)}
-              <span className="block text-xs font-normal opacity-80">
-                {getQuizCount(type)} {type === 'territories' ? 'territorier' : 'land'}
-                <span className={!timerEnabled ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
-              </span>
-            </button>
-          ))}
+          {quizOptions.map(({ type, color }) => {
+            const highScore = highScores[type]
+            return (
+              <button
+                key={type}
+                onClick={() => startQuiz(type)}
+                className={`${color} text-white font-bold py-3 px-4 rounded-lg text-lg relative`}
+              >
+                {highScore && (
+                  <span className={`absolute top-1 right-2 text-xs font-normal ${highScore.percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                    ⭐ {highScore.correct}/{highScore.total}
+                  </span>
+                )}
+                {getQuizTypeName(type)}
+                <span className="block text-xs font-normal opacity-80">
+                  {getQuizCount(type)} {type === 'territories' ? 'territorier' : 'land'}
+                  <span className={!timerEnabled ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
     )
