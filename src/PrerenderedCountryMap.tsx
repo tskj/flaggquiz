@@ -29,18 +29,17 @@ function hasPrerenderedSize(width: number, height: number, mode: 'quiz' | 'overv
 }
 
 // Get the pre-rendered image URL (respects Vite base path)
-function getPrerenderedUrl(country: string, width: number, height: number, mode: 'quiz' | 'overview', showInsets?: boolean): string {
+function getPrerenderedUrl(country: string, width: number, height: number, mode: 'quiz' | 'overview', variant: 'default' | 'zoomed-out'): string {
   const safeName = getSafeCountryName(country)
   const base = import.meta.env.BASE_URL || '/'
-  // Quiz mode has insets/noinsets variants
-  const insetsSuffix = mode === 'quiz' ? (showInsets ? '-insets' : '-noinsets') : ''
-  return `${base}maps/${safeName}-${width}x${height}-${mode}${insetsSuffix}.png`
+  const variantSuffix = mode === 'quiz' ? `-${variant}` : ''
+  return `${base}maps/${safeName}-${width}x${height}-${mode}${variantSuffix}.png`
 }
 
 /**
  * A wrapper around CountryMap that uses pre-rendered PNG images when available.
  * Falls back to live SVG rendering for non-prerendered sizes.
- * For quiz mode, supports toggling between insets view and zoomed-out view.
+ * For quiz mode, supports toggling between default view and zoomed-out view.
  */
 export function PrerenderedCountryMap({
   highlightedCountry,
@@ -52,11 +51,12 @@ export function PrerenderedCountryMap({
   capitalCoords,
 }: PrerenderedCountryMapProps) {
   const [imageError, setImageError] = useState(false)
-  const [showInsets, setShowInsets] = useState(true)
+  const [isZoomedOut, setIsZoomedOut] = useState(false)
 
-  // Reset insets state when country changes
+  // Reset zoom state when country changes
   useEffect(() => {
-    setShowInsets(true)
+    setIsZoomedOut(false)
+    setImageError(false)
   }, [highlightedCountry])
 
   // Use pre-rendered if we have a matching size+mode combo
@@ -65,32 +65,43 @@ export function PrerenderedCountryMap({
   // Preload both images for quiz mode so toggling is instant
   useEffect(() => {
     if (canUsePrerendered && mode === 'quiz') {
-      const preloadInsets = new Image()
-      preloadInsets.src = getPrerenderedUrl(highlightedCountry, width, height, mode, true)
-      const preloadNoInsets = new Image()
-      preloadNoInsets.src = getPrerenderedUrl(highlightedCountry, width, height, mode, false)
+      const preloadDefault = new Image()
+      preloadDefault.src = getPrerenderedUrl(highlightedCountry, width, height, mode, 'default')
+      const preloadZoomedOut = new Image()
+      preloadZoomedOut.src = getPrerenderedUrl(highlightedCountry, width, height, mode, 'zoomed-out')
     }
   }, [highlightedCountry, width, height, mode, canUsePrerendered])
 
   if (canUsePrerendered) {
-    const imageUrl = getPrerenderedUrl(highlightedCountry, width, height, mode, showInsets)
+    const variant = isZoomedOut ? 'zoomed-out' : 'default'
+    const imageUrl = getPrerenderedUrl(highlightedCountry, width, height, mode, variant)
 
     const handleClick = () => {
       if (allowZoomToggle && mode === 'quiz') {
-        setShowInsets(prev => !prev)
+        setIsZoomedOut(prev => !prev)
       }
       onMapClick?.()
     }
 
     return (
-      <img
-        src={imageUrl}
-        alt={highlightedCountry}
-        className="w-full h-full object-cover"
-        style={{ cursor: allowZoomToggle && mode === 'quiz' ? 'pointer' : 'default' }}
-        onClick={handleClick}
-        onError={() => setImageError(true)}
-      />
+      <div className="relative w-full h-full">
+        <img
+          src={imageUrl}
+          alt={highlightedCountry}
+          className="w-full h-full object-cover"
+          style={{ cursor: allowZoomToggle && mode === 'quiz' ? 'pointer' : 'default' }}
+          onClick={handleClick}
+          onError={() => setImageError(true)}
+        />
+        {/* Hint text overlay */}
+        {allowZoomToggle && mode === 'quiz' && (
+          <span
+            className="absolute bottom-1 right-2 text-[10px] text-white/25 pointer-events-none"
+          >
+            {isZoomedOut ? 'Klikk for å zoome inn' : 'Klikk for å zoome ut'}
+          </span>
+        )}
+      </div>
     )
   }
 

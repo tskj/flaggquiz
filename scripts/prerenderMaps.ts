@@ -25,11 +25,11 @@ const TOPOJSON_URL_50M = 'https://unpkg.com/world-atlas@2.0.2/countries-50m.json
 
 // Sizes to generate (display size - we render at 2x for retina)
 // These should match PrerenderedCountryMap.tsx PRERENDERED_SIZES
-const SIZES: { width: number; height: number; mode: 'quiz' | 'overview'; showInsets?: boolean }[] = [
+const SIZES: { width: number; height: number; mode: 'quiz' | 'overview'; variant?: 'default' | 'zoomed-out' }[] = [
   { width: 128, height: 85, mode: 'overview' },   // Results thumbnails
   { width: 200, height: 133, mode: 'overview' },  // Capital choice quiz options
-  { width: 672, height: 378, mode: 'quiz', showInsets: true },   // Main quiz view - with insets
-  { width: 672, height: 378, mode: 'quiz', showInsets: false },  // Main quiz view - zoomed out (no insets)
+  { width: 672, height: 378, mode: 'quiz', variant: 'default' },     // Main quiz view - default (with insets if applicable)
+  { width: 672, height: 378, mode: 'quiz', variant: 'zoomed-out' },  // Main quiz view - zoomed out (all territories or global context)
 ]
 
 // Render at 2x resolution for sharper display on retina screens
@@ -89,10 +89,7 @@ async function main() {
     // Sanitize country name for filename
     const safeName = country.replace(/[^a-zA-Z0-9-]/g, '_')
 
-    for (const { width, height, mode, showInsets } of SIZES) {
-      // Default showInsets to true for overview, use specified value for quiz
-      const effectiveShowInsets = showInsets ?? (mode === 'overview')
-
+    for (const { width, height, mode, variant } of SIZES) {
       const result = renderMapToSVG(
         country,
         countryFeature,
@@ -102,7 +99,7 @@ async function main() {
           width,
           height,
           mode,
-          showInsets: effectiveShowInsets,
+          variant: variant ?? 'default',
           scaleFactor: SCALE_FACTOR
         }
       )
@@ -112,9 +109,9 @@ async function main() {
         continue
       }
 
-      // Include insets suffix for quiz mode variants
-      const insetsSuffix = mode === 'quiz' ? (effectiveShowInsets ? '-insets' : '-noinsets') : ''
-      const outputPath = path.join(OUTPUT_DIR, `${safeName}-${width}x${height}-${mode}${insetsSuffix}.png`)
+      // Include variant suffix for quiz mode
+      const variantSuffix = mode === 'quiz' && variant ? `-${variant}` : ''
+      const outputPath = path.join(OUTPUT_DIR, `${safeName}-${width}x${height}-${mode}${variantSuffix}.png`)
       await svgToPng(result.svg, outputPath)
     }
 

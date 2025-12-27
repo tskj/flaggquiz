@@ -546,12 +546,12 @@ function CountryMapInner({
         />
       ))}
 
-      {/* Capital marker (red dot) */}
+      {/* Capital marker (red dot) - scales with zoom level */}
       {capitalScreenPos && (
         <circle
           cx={capitalScreenPos[0]}
           cy={capitalScreenPos[1]}
-          r={3}
+          r={Math.max(2, Math.min(4, 3 * (projectionScale / 1500)))}
           fill="#ef4444"
         />
       )}

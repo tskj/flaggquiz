@@ -224,11 +224,217 @@ export function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
   }
 }
 
+// Fixed global zoom level for "see where in the world" view
+export const GLOBAL_CONTEXT_ZOOM = 250
+
+interface InsetBox {
+  x: number
+  y: number
+  w: number
+  h: number
+  paths: string[]
+  touchesLeft: boolean
+  touchesTop: boolean
+  touchesRight: boolean
+  touchesBottom: boolean
+}
+
+/**
+ * Calculate inset boxes for overseas territories
+ */
+function calculateInsetBoxes(
+  polygonParts: PolygonParts,
+  projection: ReturnType<typeof geoAzimuthalEqualArea>,
+  projectionScale: number,
+  width: number,
+  height: number,
+  scaleFactor: number
+): InsetBox[] {
+  if (polygonParts.insetGroups.length === 0) return []
+
+  const padding = 0  // Glued to the edge
+  const mainCentroid = geoCentroid(polygonParts.mainForProjection)
+  const mainScreen = projection(mainCentroid)
+  if (!mainScreen) return []
+
+  const usedPositions: { x: number; y: number; w: number; h: number }[] = []
+
+  return polygonParts.insetGroups.map((group) => {
+    const combinedFeature: Feature<Geometry> = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: group.map(p => p.geometry.coordinates)
+      }
+    }
+
+    const groupCentroid = geoCentroid(combinedFeature)
+    const groupScreen = projection(groupCentroid)
+
+    let dx: number, dy: number
+    if (groupScreen) {
+      dx = groupScreen[0] - mainScreen[0]
+      dy = groupScreen[1] - mainScreen[1]
+    } else {
+      dx = groupCentroid[0] - mainCentroid[0]
+      dy = -(groupCentroid[1] - mainCentroid[1])
+    }
+
+    const length = Math.sqrt(dx * dx + dy * dy)
+    if (length > 0) {
+      dx /= length
+      dy /= length
+    }
+
+    const groupCenter = groupCentroid
+    const minBoxSize = 30 * scaleFactor
+    const maxBoxSize = 60 * scaleFactor
+    const contentPadding = 4 * scaleFactor
+
+    const testProjection = geoAzimuthalEqualArea()
+      .rotate([-groupCenter[0], -groupCenter[1]])
+      .fitSize([maxBoxSize - contentPadding * 2, maxBoxSize - contentPadding * 2], combinedFeature)
+
+    const testPath = geoPath(testProjection)
+    const bounds = testPath.bounds(combinedFeature)
+    const naturalWidth = Math.max(1, bounds[1][0] - bounds[0][0])
+    const naturalHeight = Math.max(1, bounds[1][1] - bounds[0][1])
+
+    const aspectRatio = naturalWidth / naturalHeight
+    let boxWidth: number, boxHeight: number
+
+    if (aspectRatio > 1) {
+      boxWidth = Math.min(maxBoxSize, naturalWidth + contentPadding * 2)
+      boxHeight = boxWidth / aspectRatio
+      if (boxHeight < minBoxSize) {
+        boxHeight = minBoxSize
+        boxWidth = boxHeight * aspectRatio
+      }
+    } else {
+      boxHeight = Math.min(maxBoxSize, naturalHeight + contentPadding * 2)
+      boxWidth = boxHeight * aspectRatio
+      if (boxWidth < minBoxSize) {
+        boxWidth = minBoxSize
+        boxHeight = boxWidth / aspectRatio
+      }
+    }
+
+    if (boxWidth > maxBoxSize) {
+      boxWidth = maxBoxSize
+      boxHeight = boxWidth / aspectRatio
+    }
+    if (boxHeight > maxBoxSize) {
+      boxHeight = maxBoxSize
+      boxWidth = boxHeight * aspectRatio
+    }
+
+    const centerX = width / 2
+    const centerY = height / 2
+    const edgePadding = padding + boxWidth / 2
+
+    let x: number, y: number
+
+    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+      x = padding
+      y = padding
+    } else {
+      const intersections: { x: number; y: number; t: number }[] = []
+
+      if (dx < 0) {
+        const t = (edgePadding - centerX) / dx
+        const iy = centerY + t * dy
+        if (iy >= padding && iy <= height - padding - boxHeight) {
+          intersections.push({ x: padding, y: iy - boxHeight / 2, t: Math.abs(t) })
+        }
+      }
+      if (dx > 0) {
+        const t = (width - edgePadding - centerX) / dx
+        const iy = centerY + t * dy
+        if (iy >= padding && iy <= height - padding - boxHeight) {
+          intersections.push({ x: width - padding - boxWidth, y: iy - boxHeight / 2, t: Math.abs(t) })
+        }
+      }
+      if (dy < 0) {
+        const t = (edgePadding - centerY) / dy
+        const ix = centerX + t * dx
+        if (ix >= padding && ix <= width - padding - boxWidth) {
+          intersections.push({ x: ix - boxWidth / 2, y: padding, t: Math.abs(t) })
+        }
+      }
+      if (dy > 0) {
+        const t = (height - edgePadding - centerY) / dy
+        const ix = centerX + t * dx
+        if (ix >= padding && ix <= width - padding - boxWidth) {
+          intersections.push({ x: ix - boxWidth / 2, y: height - padding - boxHeight, t: Math.abs(t) })
+        }
+      }
+
+      if (intersections.length > 0) {
+        intersections.sort((a, b) => a.t - b.t)
+        const pos = intersections[0]
+        x = Math.max(padding, Math.min(width - padding - boxWidth, pos.x))
+        y = Math.max(padding, Math.min(height - padding - boxHeight, pos.y))
+      } else {
+        x = dx < 0 ? padding : width - padding - boxWidth
+        y = dy < 0 ? padding : height - padding - boxHeight
+      }
+    }
+
+    for (const used of usedPositions) {
+      const overlapX = Math.abs(x - used.x) < Math.max(boxWidth, used.w) + 4 * scaleFactor
+      const overlapY = Math.abs(y - used.y) < Math.max(boxHeight, used.h) + 4 * scaleFactor
+      if (overlapX && overlapY) {
+        if (y <= padding + 1 || y >= height - padding - boxHeight - 1) {
+          x += boxWidth + 4 * scaleFactor
+          if (x > width - padding - boxWidth) x = padding
+        } else {
+          y += boxHeight + 4 * scaleFactor
+          if (y > height - padding - boxHeight) y = padding
+        }
+      }
+    }
+
+    usedPositions.push({ x, y, w: boxWidth, h: boxHeight })
+
+    const insetProjection = geoAzimuthalEqualArea()
+      .rotate([-groupCenter[0], -groupCenter[1]])
+      .fitExtent(
+        [[contentPadding, contentPadding], [boxWidth - contentPadding, boxHeight - contentPadding]],
+        combinedFeature
+      )
+
+    const insetScale = insetProjection.scale()
+    const maxScale = projectionScale * 2
+    if (insetScale > maxScale) {
+      insetProjection.scale(maxScale)
+      const tempPath = geoPath(insetProjection)
+      const newBounds = tempPath.bounds(combinedFeature)
+      const cx = (newBounds[0][0] + newBounds[1][0]) / 2
+      const cy = (newBounds[0][1] + newBounds[1][1]) / 2
+      insetProjection.translate([
+        boxWidth / 2 - cx + insetProjection.translate()[0],
+        boxHeight / 2 - cy + insetProjection.translate()[1]
+      ])
+    }
+
+    const insetPath = geoPath(insetProjection)
+    const paths = group.map(poly => insetPath(poly) || '').filter(d => d)
+
+    const touchesLeft = x <= 1
+    const touchesTop = y <= 1
+    const touchesRight = x + boxWidth >= width - 1
+    const touchesBottom = y + boxHeight >= height - 1
+
+    return { x, y, w: boxWidth, h: boxHeight, paths, touchesLeft, touchesTop, touchesRight, touchesBottom }
+  })
+}
+
 export interface RenderMapOptions {
   width: number
   height: number
   mode: 'quiz' | 'overview'
-  showInsets?: boolean
+  variant?: 'default' | 'zoomed-out'  // default = with insets, zoomed-out = show all or global context
   scaleFactor?: number  // For retina rendering (e.g., 2 for 2x)
 }
 
@@ -250,9 +456,21 @@ export function renderMapToSVG(
   targetISO: string,
   options: RenderMapOptions
 ): RenderMapResult | null {
-  const { mode, showInsets = true, scaleFactor = 1 } = options
+  const { mode, variant = 'default', scaleFactor = 1 } = options
   const width = options.width * scaleFactor
   const height = options.height * scaleFactor
+
+  const polygonParts = getPolygonParts(targetFeature)
+  if (!polygonParts) return null
+
+  const forceNoInsets = countriesWithoutInsets.includes(country)
+  const hasInsets = !forceNoInsets && polygonParts.insets.length > 0
+
+  // Determine if we should show insets (only for default variant in quiz mode)
+  const showInsets = mode === 'quiz' && variant === 'default' && hasInsets
+
+  // Determine if we should use global context zoom (zoomed-out variant for non-inset countries)
+  const useGlobalZoom = mode === 'quiz' && variant === 'zoomed-out' && !hasInsets
 
   const extraZoom = countriesNeedingExtraZoom[country] || 1.0
   // Overview mode: 0.85 fits country with some context
@@ -260,20 +478,15 @@ export function renderMapToSVG(
   const baseZoomFactor = mode === 'overview' ? 0.85 * extraZoom : 0.5 * extraZoom
   const paddingPx = (mode === 'overview' ? 4 : 10) * scaleFactor
 
-  const polygonParts = getPolygonParts(targetFeature)
-  if (!polygonParts) return null
-
-  const forceNoInsets = countriesWithoutInsets.includes(country)
-  const effectiveShowInsets = forceNoInsets ? false : showInsets
-
   const mainArea = geoArea(polygonParts.nearbyPolygons[0])
 
-  // When insets are hidden, include ALL polygons for centering/fitting
-  const allPolygons = effectiveShowInsets
+  // When showing insets or in overview mode, only use nearby polygons for fitting
+  // When zoomed out (no insets), include ALL polygons for centering/fitting
+  const allPolygons = showInsets || mode === 'overview'
     ? polygonParts.nearbyPolygons
     : [...polygonParts.nearbyPolygons, ...polygonParts.insets]
 
-  const significantPolygons = effectiveShowInsets
+  const significantPolygons = showInsets || mode === 'overview'
     ? allPolygons.filter(p => geoArea(p) >= mainArea * 0.01)
     : allPolygons
 
@@ -297,7 +510,8 @@ export function renderMapToSVG(
     )
 
   const currentScale = projection.scale()
-  const finalScale = currentScale * baseZoomFactor
+  // Use fixed global zoom for context view, otherwise use the calculated zoom factor
+  const finalScale = useGlobalZoom ? GLOBAL_CONTEXT_ZOOM * scaleFactor : currentScale * baseZoomFactor
   projection.scale(finalScale)
   projection.translate([width / 2, height / 2])
 
@@ -315,7 +529,9 @@ export function renderMapToSVG(
     .filter((d): d is string => d !== null)
 
   // Generate target paths
-  const polygonsToRender = effectiveShowInsets
+  // When showing insets, only render nearby polygons (insets go in boxes)
+  // When zoomed out, render everything
+  const polygonsToRender = showInsets
     ? [...polygonParts.nearbyPolygons, ...polygonParts.tinyDistantIslands]
     : [...polygonParts.nearbyPolygons, ...polygonParts.tinyDistantIslands, ...polygonParts.insets]
 
@@ -323,11 +539,33 @@ export function renderMapToSVG(
     .map(poly => pathGenerator(poly))
     .filter((d): d is string => d !== null)
 
+  // Calculate inset boxes (only for quiz mode default variant with insets)
+  const insetBoxes = showInsets
+    ? calculateInsetBoxes(polygonParts, projection, finalScale, width, height, scaleFactor)
+    : []
+
+  // Generate inset box SVG
+  const insetSvg = insetBoxes.map(({ x, y, w, h, paths, touchesLeft, touchesTop, touchesRight, touchesBottom }) => {
+    const strokeSegments: string[] = []
+    if (!touchesTop) strokeSegments.push(`M0,0 L${w},0`)
+    if (!touchesRight) strokeSegments.push(`M${w},0 L${w},${h}`)
+    if (!touchesBottom) strokeSegments.push(`M${w},${h} L0,${h}`)
+    if (!touchesLeft) strokeSegments.push(`M0,${h} L0,0`)
+
+    return `<g transform="translate(${x}, ${y})">
+    <rect width="${w}" height="${h}" fill="${OCEAN_COLOR}"/>
+    <defs><clipPath id="clip-${x}-${y}"><rect width="${w}" height="${h}" rx="2"/></clipPath></defs>
+    ${paths.map(d => `<path d="${d}" clip-path="url(#clip-${x}-${y})" fill="${COUNTRY_COLOR}"/>`).join('\n    ')}
+    ${strokeSegments.length > 0 ? `<path d="${strokeSegments.join(' ')}" stroke="${COUNTRY_COLOR}" stroke-width="1" fill="none"/>` : ''}
+  </g>`
+  }).join('\n  ')
+
   // Build SVG
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="${width}" height="${height}" fill="${OCEAN_COLOR}"/>
   ${neighborPaths.map(d => `<path d="${d}" fill="${NEIGHBOR_COLOR}" stroke="${OCEAN_COLOR}" stroke-width="${strokeWidth}"/>`).join('\n  ')}
   ${targetPaths.map(d => `<path d="${d}" fill="${COUNTRY_COLOR}"/>`).join('\n  ')}
+  ${insetSvg}
 </svg>`
 
   return {
