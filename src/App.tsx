@@ -2,7 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
 import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
-import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, type QuizSession, type QuizType } from './storage'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
+import { CountryMap, preloadMapData } from './CountryMap'
+
+// Start preloading map data immediately
+preloadMapData()
 
 // Countries by continent (English names matching country-flags.json keys)
 export const europeanCountries = [
@@ -324,16 +328,21 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Get the appropriate flags and names based on quiz type
-  const getQuizFlags = (type: QuizType) => type === 'territories' ? territoryFlags : countryFlags
+  const getQuizFlags = (type: QuizType) => {
+    const baseType = getBaseQuizType(type)
+    return baseType === 'territories' ? territoryFlags : countryFlags
+  }
   const getQuizName = (country: string) => {
-    if (quizType === 'territories') {
+    const baseType = getBaseQuizType(quizType)
+    if (baseType === 'territories') {
       return territoryNorwegianNames[country] || country
     }
     return norwegianNames[country] || country
   }
 
   const getQuizCount = (type: QuizType): number => {
-    switch (type) {
+    const baseType = getBaseQuizType(type)
+    switch (baseType) {
       case 'europe': return europeanCountries.length
       case 'africa': return africanCountries.length
       case 'asia': return asianCountries.length
@@ -346,21 +355,24 @@ export default function App() {
   }
 
   const getQuizTypeName = (type: QuizType): string => {
-    switch (type) {
-      case 'europe': return 'Europa'
-      case 'africa': return 'Afrika'
-      case 'asia': return 'Asia'
-      case 'north-america': return 'Nord-Amerika'
-      case 'south-america': return 'Sør-Amerika'
-      case 'oceania': return 'Oseania'
+    const baseType = getBaseQuizType(type)
+    const prefix = isMapQuiz(type) ? 'Kart: ' : ''
+    switch (baseType) {
+      case 'europe': return prefix + 'Europa'
+      case 'africa': return prefix + 'Afrika'
+      case 'asia': return prefix + 'Asia'
+      case 'north-america': return prefix + 'Nord-Amerika'
+      case 'south-america': return prefix + 'Sør-Amerika'
+      case 'oceania': return prefix + 'Oseania'
       case 'territories': return 'Ymse territorier'
-      default: return 'Verden'
+      default: return prefix + 'Verden'
     }
   }
 
   const currentFlags = getQuizFlags(quizType)
   const totalFlags = getQuizCount(quizType)
-  const allNorwegianNames = quizType === 'territories'
+  const baseQuizType = getBaseQuizType(quizType)
+  const allNorwegianNames = baseQuizType === 'territories'
     ? Object.keys(territoryFlags).map(c => territoryNorwegianNames[c] || c)
     : Object.keys(countryFlags).map(c => norwegianNames[c] || c)
 
@@ -474,21 +486,32 @@ export default function App() {
   }, [quizStarted, quizFinished, currentIndex, round])
 
 
+  // Countries without map data in world-atlas (political reasons)
+  const countriesWithoutMapData = ['Kosovo']
+
   const getCountriesForType = (type: QuizType): string[] => {
-    switch (type) {
-      case 'europe': return europeanCountries.filter(c => c in countryFlags)
-      case 'africa': return africanCountries.filter(c => c in countryFlags)
-      case 'asia': return asianCountries.filter(c => c in countryFlags)
-      case 'north-america': return northAmericanCountries.filter(c => c in countryFlags)
-      case 'south-america': return southAmericanCountries.filter(c => c in countryFlags)
-      case 'oceania': return oceanianCountries.filter(c => c in countryFlags)
-      case 'territories': return Object.keys(territoryFlags)
-      default: return Object.keys(countryFlags)
+    const baseType = getBaseQuizType(type)
+    let countries: string[]
+    switch (baseType) {
+      case 'europe': countries = europeanCountries.filter(c => c in countryFlags); break
+      case 'africa': countries = africanCountries.filter(c => c in countryFlags); break
+      case 'asia': countries = asianCountries.filter(c => c in countryFlags); break
+      case 'north-america': countries = northAmericanCountries.filter(c => c in countryFlags); break
+      case 'south-america': countries = southAmericanCountries.filter(c => c in countryFlags); break
+      case 'oceania': countries = oceanianCountries.filter(c => c in countryFlags); break
+      case 'territories': countries = Object.keys(territoryFlags); break
+      default: countries = Object.keys(countryFlags)
     }
+    // Filter out countries without map data for map quizzes
+    if (isMapQuiz(type)) {
+      countries = countries.filter(c => !countriesWithoutMapData.includes(c))
+    }
+    return countries
   }
 
   const getDefaultTime = (type: QuizType): number => {
-    switch (type) {
+    const baseType = getBaseQuizType(type)
+    switch (baseType) {
       case 'territories': return 3 * 60
       case 'oceania': return 5 * 60
       case 'south-america': return 5 * 60
@@ -675,7 +698,7 @@ export default function App() {
   }
 
   if (!quizStarted) {
-    const quizOptions: { type: QuizType; color: string }[] = [
+    const flagQuizOptions: { type: QuizType; color: string }[] = [
       { type: 'world', color: 'bg-blue-600 hover:bg-blue-700' },
       { type: 'europe', color: 'bg-green-600 hover:bg-green-700' },
       { type: 'africa', color: 'bg-yellow-600 hover:bg-yellow-700' },
@@ -685,7 +708,39 @@ export default function App() {
       { type: 'oceania', color: 'bg-cyan-600 hover:bg-cyan-700' },
       { type: 'territories', color: 'bg-purple-600 hover:bg-purple-700' },
     ]
+    const mapQuizOptions: { type: QuizType; color: string }[] = [
+      { type: 'map-world', color: 'bg-blue-800 hover:bg-blue-900' },
+      { type: 'map-europe', color: 'bg-green-800 hover:bg-green-900' },
+      { type: 'map-africa', color: 'bg-yellow-800 hover:bg-yellow-900' },
+      { type: 'map-asia', color: 'bg-red-800 hover:bg-red-900' },
+      { type: 'map-north-america', color: 'bg-orange-800 hover:bg-orange-900' },
+      { type: 'map-south-america', color: 'bg-teal-800 hover:bg-teal-900' },
+      { type: 'map-oceania', color: 'bg-cyan-800 hover:bg-cyan-900' },
+    ]
     const highScores = getHighScores()
+
+    const renderQuizButton = ({ type, color }: { type: QuizType; color: string }) => {
+      const highScore = highScores[type]
+      const baseType = getBaseQuizType(type)
+      return (
+        <button
+          key={type}
+          onClick={() => startQuiz(type)}
+          className={`${color} text-white font-bold py-3 px-4 rounded-lg text-lg relative`}
+        >
+          {highScore && (
+            <span className={`absolute top-1 right-2 text-xs font-normal ${highScore.percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+              ⭐ {highScore.correct}/{highScore.total}
+            </span>
+          )}
+          {getQuizTypeName(type)}
+          <span className="block text-xs font-normal opacity-80">
+            {getQuizCount(type)} {baseType === 'territories' ? 'territorier' : 'land'}
+            <span className={!timerEnabled ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
+          </span>
+        </button>
+      )
+    }
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
@@ -699,28 +754,15 @@ export default function App() {
           />
           <span className="text-gray-300">Uten tidsbegrensning</span>
         </label>
+
+        <h2 className="text-gray-400 text-sm mb-2">Flagg</h2>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
+          {flagQuizOptions.map(renderQuizButton)}
+        </div>
+
+        <h2 className="text-gray-400 text-sm mb-2">Kart</h2>
         <div className="grid grid-cols-2 gap-3 w-full max-w-md">
-          {quizOptions.map(({ type, color }) => {
-            const highScore = highScores[type]
-            return (
-              <button
-                key={type}
-                onClick={() => startQuiz(type)}
-                className={`${color} text-white font-bold py-3 px-4 rounded-lg text-lg relative`}
-              >
-                {highScore && (
-                  <span className={`absolute top-1 right-2 text-xs font-normal ${highScore.percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
-                    ⭐ {highScore.correct}/{highScore.total}
-                  </span>
-                )}
-                {getQuizTypeName(type)}
-                <span className="block text-xs font-normal opacity-80">
-                  {getQuizCount(type)} {type === 'territories' ? 'territorier' : 'land'}
-                  <span className={!timerEnabled ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
-                </span>
-              </button>
-            )
-          })}
+          {mapQuizOptions.map(renderQuizButton)}
         </div>
       </div>
     )
@@ -801,11 +843,17 @@ export default function App() {
                   key={country}
                   className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
                 >
-                  <img
-                    src={flagUrl}
-                    alt={name}
-                    className="w-20 h-12 object-contain mb-1"
-                  />
+                  {isMapQuiz(quizType) ? (
+                    <div className="w-20 h-12 mb-1">
+                      <CountryMap highlightedCountry={country} width={80} height={48} mode="overview" />
+                    </div>
+                  ) : (
+                    <img
+                      src={flagUrl}
+                      alt={name}
+                      className="w-20 h-12 object-contain mb-1"
+                    />
+                  )}
                   <span className={`text-xs text-center ${textColor}`}>
                     {name}
                   </span>
@@ -829,29 +877,35 @@ export default function App() {
   const quizTypeName = getQuizTypeName(quizType)
 
   return (
-    <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
-      <div className="flex-1 flex flex-col items-center pt-2 sm:pt-8">
-        <div className="w-full max-w-sm mb-2">
+    <div className="min-h-screen flex flex-col p-2 sm:p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
+      <div className="flex-1 flex flex-col items-center pt-1 sm:pt-4 lg:pt-8">
+        <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg mb-1 sm:mb-2">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-white text-xl font-mono">{timerEnabled ? formatTime(timeRemaining) : '∞'}</span>
-            <span className="text-green-500 text-lg font-bold">{completedCount} riktige</span>
+            <span className="text-white text-lg sm:text-xl lg:text-2xl font-mono">{timerEnabled ? formatTime(timeRemaining) : '∞'}</span>
+            <span className="text-green-500 text-base sm:text-lg lg:text-xl font-bold">{completedCount} riktige</span>
           </div>
-          <div className="flex justify-between items-center text-sm">
+          <div className="flex justify-between items-center text-xs sm:text-sm lg:text-base">
             <span className="text-gray-500">{quizTypeName} - Runde {round}</span>
-            <div className="flex gap-4">
+            <div className="flex gap-2 sm:gap-4">
               <span className="text-gray-400">{remainingInRound} igjen</span>
               <span className="text-yellow-500">{skippedCount} hoppet over</span>
             </div>
           </div>
         </div>
 
-        <img
-          src={flagUrl}
-          alt="Flagg"
-          className="w-full max-w-sm h-48 object-contain mb-4"
-        />
+        {isMapQuiz(quizType) ? (
+          <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 mb-2 sm:mb-4 flex items-center justify-center">
+            <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
+          </div>
+        ) : (
+          <img
+            src={flagUrl}
+            alt="Flagg"
+            className="w-full max-w-xs sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 object-contain mb-2 sm:mb-4"
+          />
+        )}
 
-        <div className="w-full max-w-sm mb-4">
+        <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
           <input
             ref={inputRef}
             type="text"
@@ -859,7 +913,7 @@ export default function App() {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Skriv landets navn..."
-            className={`w-full text-white rounded-lg px-4 py-3 text-lg focus:outline-none transition-colors duration-150 ${
+            className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 ${
               justAnswered
                 ? 'bg-green-600 border-green-500 border-2 font-bold'
                 : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
@@ -872,21 +926,21 @@ export default function App() {
 
         <button
           onClick={skipFlag}
-          className="w-full max-w-sm bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg mb-3"
+          className="w-full max-w-xs sm:max-w-sm lg:max-w-lg bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
         >
-          Hopp over <span className="text-gray-400 text-sm">(Tab / Shift+Tab tilbake)</span>
+          Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
         </button>
 
         <div className="flex gap-4">
           <button
             onClick={giveUp}
-            className="text-gray-500 hover:text-gray-400 text-sm underline"
+            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
           >
             Gi opp
           </button>
           <button
             onClick={() => startQuiz(quizType)}
-            className="text-gray-500 hover:text-gray-400 text-sm underline"
+            className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
           >
             Start på nytt
           </button>
