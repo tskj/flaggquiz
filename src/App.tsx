@@ -1440,38 +1440,45 @@ export default function App() {
               }
 
               // Render different content based on choice type
-              let content: React.ReactNode
               if (choiceType === 'flag') {
-                content = (
-                  <img
-                    src={optionFlagUrl}
-                    alt="Flagg"
-                    className="w-full h-20 sm:h-24 object-contain"
-                  />
+                return (
+                  <button
+                    key={option}
+                    onClick={() => handleCapitalChoiceClick(option)}
+                    disabled={justAnswered}
+                    className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
+                  >
+                    <img
+                      src={optionFlagUrl}
+                      alt="Flagg"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
                 )
               } else if (choiceType === 'map') {
-                content = (
-                  <div className="w-full h-20 sm:h-24 flex items-center justify-center">
-                    <CountryMap highlightedCountry={option} width={120} height={80} mode="overview" />
-                  </div>
+                return (
+                  <button
+                    key={option}
+                    onClick={() => handleCapitalChoiceClick(option)}
+                    disabled={justAnswered}
+                    className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
+                  >
+                    <CountryMap highlightedCountry={option} width={200} height={112} mode="overview" />
+                  </button>
                 )
               } else {
                 // 'name'
-                content = (
-                  <span className="text-white font-bold text-lg py-4">{optionName}</span>
+                return (
+                  <button
+                    key={option}
+                    onClick={() => handleCapitalChoiceClick(option)}
+                    disabled={justAnswered}
+                    className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36 bg-gray-800 hover:bg-gray-700 flex items-center justify-center`}
+                  >
+                    <span className="text-white font-bold text-lg">{optionName}</span>
+                  </button>
                 )
               }
-
-              return (
-                <button
-                  key={option}
-                  onClick={() => handleCapitalChoiceClick(option)}
-                  disabled={justAnswered}
-                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 p-2 bg-gray-800 hover:bg-gray-700 flex items-center justify-center min-h-[6rem]`}
-                >
-                  {content}
-                </button>
-              )
             })}
           </div>
         ) : isKidsMapQuiz(quizType) ? (
@@ -1499,12 +1506,12 @@ export default function App() {
                   key={option}
                   onClick={() => handleKidsOptionClick(option)}
                   disabled={justAnswered}
-                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 p-1`}
+                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
                 >
                   <img
                     src={optionFlagUrl}
                     alt="Flagg"
-                    className="w-full h-20 sm:h-24 object-contain"
+                    className="w-full h-full object-cover"
                   />
                 </button>
               )
