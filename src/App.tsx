@@ -941,7 +941,7 @@ export default function App() {
 
         {isMapQuiz(quizType) ? (
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4">
-            <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
+            <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={!practiceMode} />
           </div>
         ) : (
           <img

@@ -247,6 +247,7 @@ interface CountryMapProps {
   width?: number
   height?: number
   mode?: 'quiz' | 'overview' // quiz = show neighbors, overview = zoomed in on country
+  allowZoomToggle?: boolean // Whether clicking toggles zoom (disabled in practice mode)
 }
 
 interface CountryFeature extends Feature<Geometry> {
@@ -265,6 +266,7 @@ function CountryMapInner({
   width = 400,
   height = 300,
   mode = 'quiz',
+  allowZoomToggle = true,
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview zooms in on the country
   const baseZoomFactor = mode === 'overview' ? 3.5 : 0.5
@@ -341,8 +343,8 @@ function CountryMapInner({
   // Check if this country has insets
   const hasInsets = !forceNoInsets && polygonParts?.insets && polygonParts.insets.length > 0
 
-  // All countries can toggle zoom
-  const canToggleZoom = true
+  // Toggle zoom allowed unless explicitly disabled (e.g., practice mode)
+  const canToggleZoom = allowZoomToggle
 
   // Use fixed global zoom level when zoomed out for context (for non-inset countries)
   // For inset countries, the zoom is controlled by showInsets logic
