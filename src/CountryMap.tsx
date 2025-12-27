@@ -56,7 +56,7 @@ function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][]
     centroid: geoCentroid(p)
   }))
 
-  // Group polygons that are within 3 degrees of each other (keeps archipelagos together but separates distant islands)
+  // Group polygons that are within 8 degrees of each other (keeps archipelagos like Svalbard together)
   const groups: Feature<Polygon>[][] = []
   const used = new Set<number>()
 
@@ -75,7 +75,7 @@ function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][]
 
         const b = polygonsWithBounds[j]
 
-        // Check if this polygon is within 10 degrees of ANY polygon in the group
+        // Check if this polygon is within 8 degrees of ANY polygon in the group
         for (const groupPoly of group) {
           const a = polygonsWithBounds.find(p => p.poly === groupPoly)!
           const dist = Math.sqrt(
@@ -83,7 +83,7 @@ function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][]
             Math.pow(a.centroid[1] - b.centroid[1], 2)
           )
 
-          if (dist < 3) {
+          if (dist < 8) {
             group.push(b.poly)
             used.add(j)
             foundMore = true
@@ -183,11 +183,11 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
         bounds[0][1] > paddedBounds.maxLat    // Entirely north of padded main
 
       if (isDistant) {
-        // Significant distant territories (>= 0.2% of main) get inset boxes
-        // Tiny distant islands (< 0.2% but >= 0.05%) are rendered in main view as dots
-        if (area >= mainArea * 0.002) {
+        // Significant distant territories (>= 0.1% of main) get inset boxes
+        // Tiny distant islands (< 0.1% but >= 0.02%) are rendered in main view as dots
+        if (area >= mainArea * 0.001) {
           insets.push(poly)
-        } else if (area >= mainArea * 0.0005) {
+        } else if (area >= mainArea * 0.0002) {
           tinyDistantIslands.push(poly)
         }
       } else {
@@ -509,10 +509,10 @@ function CountryMapInner({
 
       // Define min/max box sizes
       const minBoxSize = 30
-      const maxBoxSize = 80
+      const maxBoxSize = 60
       const contentPadding = 4
 
-      // Create a projection fitted to the inset content area to measure natural size
+      // Create a projection fitted to max box size to measure natural dimensions
       const testProjection = geoAzimuthalEqualArea()
         .rotate([-groupCenter[0], -groupCenter[1]])
         .fitSize([maxBoxSize - contentPadding * 2, maxBoxSize - contentPadding * 2], combinedFeature)
@@ -523,27 +523,38 @@ function CountryMapInner({
       const naturalWidth = Math.max(1, bounds[1][0] - bounds[0][0])
       const naturalHeight = Math.max(1, bounds[1][1] - bounds[0][1])
 
-      // Get the fitted scale and check if it needs capping
-      const fitScale = testProjection.scale()
-      const maxScale = projectionScale * 2
-      const scaleCapped = fitScale > maxScale
-      const finalScale = Math.min(fitScale, maxScale)
-
-      // Calculate base box size based on aspect ratio
+      // Calculate box size based on aspect ratio, maintaining proper proportions
+      const aspectRatio = naturalWidth / naturalHeight
       let boxWidth: number, boxHeight: number
-      if (naturalWidth > naturalHeight) {
-        boxWidth = Math.max(minBoxSize, Math.min(maxBoxSize, naturalWidth + contentPadding * 2))
-        boxHeight = Math.max(minBoxSize, boxWidth * (naturalHeight / naturalWidth))
+
+      if (aspectRatio > 1) {
+        // Wider than tall
+        boxWidth = Math.min(maxBoxSize, naturalWidth + contentPadding * 2)
+        boxHeight = boxWidth / aspectRatio
+        // If height is too small, scale up both to meet minBoxSize
+        if (boxHeight < minBoxSize) {
+          boxHeight = minBoxSize
+          boxWidth = boxHeight * aspectRatio
+        }
       } else {
-        boxHeight = Math.max(minBoxSize, Math.min(maxBoxSize, naturalHeight + contentPadding * 2))
-        boxWidth = Math.max(minBoxSize, boxHeight * (naturalWidth / naturalHeight))
+        // Taller than wide
+        boxHeight = Math.min(maxBoxSize, naturalHeight + contentPadding * 2)
+        boxWidth = boxHeight * aspectRatio
+        // If width is too small, scale up both to meet minBoxSize
+        if (boxWidth < minBoxSize) {
+          boxWidth = minBoxSize
+          boxHeight = boxWidth / aspectRatio
+        }
       }
 
-      // If scale was capped, shrink box proportionally so island fills the smaller box
-      if (scaleCapped) {
-        const shrinkRatio = maxScale / fitScale
-        boxWidth = Math.max(minBoxSize, boxWidth * shrinkRatio)
-        boxHeight = Math.max(minBoxSize, boxHeight * shrinkRatio)
+      // Ensure we don't exceed maxBoxSize
+      if (boxWidth > maxBoxSize) {
+        boxWidth = maxBoxSize
+        boxHeight = boxWidth / aspectRatio
+      }
+      if (boxHeight > maxBoxSize) {
+        boxHeight = maxBoxSize
+        boxWidth = boxHeight * aspectRatio
       }
 
       // Calculate position along the edge of the screen
@@ -629,10 +640,29 @@ function CountryMapInner({
 
       usedPositions.push({ x, y, w: boxWidth, h: boxHeight })
 
+      // Create projection centered on this group and fit to the box
       const insetProjection = geoAzimuthalEqualArea()
         .rotate([-groupCenter[0], -groupCenter[1]])
-        .scale(finalScale)
-        .translate([boxWidth / 2, boxHeight / 2])
+        .fitExtent(
+          [[contentPadding, contentPadding], [boxWidth - contentPadding, boxHeight - contentPadding]],
+          combinedFeature
+        )
+
+      // Cap scale to prevent tiny islands from being blown up huge (Tonga fix)
+      const insetScale = insetProjection.scale()
+      const maxScale = projectionScale * 2
+      if (insetScale > maxScale) {
+        insetProjection.scale(maxScale)
+        // Re-center after scale change
+        const tempPath = geoPath(insetProjection)
+        const bounds = tempPath.bounds(combinedFeature)
+        const cx = (bounds[0][0] + bounds[1][0]) / 2
+        const cy = (bounds[0][1] + bounds[1][1]) / 2
+        insetProjection.translate([
+          boxWidth / 2 - cx + insetProjection.translate()[0],
+          boxHeight / 2 - cy + insetProjection.translate()[1]
+        ])
+      }
 
       const insetPath = geoPath(insetProjection)
       // Generate paths for all polygons in the group
