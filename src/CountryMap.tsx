@@ -239,41 +239,49 @@ function CountryMapInner({
     return getPolygonParts(targetFeature50m)
   }, [targetFeature50m])
 
-  const { pathGenerator, projectionScale } = useMemo(() => {
-    if (!polygonParts) return { pathGenerator: null, projectionScale: 1000 }
+  const { pathGenerator, projectionScale, projection } = useMemo(() => {
+    if (!polygonParts) return { pathGenerator: null, projectionScale: 1000, projection: null }
 
     const paddingPx = 20
 
-    // Create a combined feature from all nearby polygons (mainland + nearby islands)
-    // This ensures we center on and fit all visible parts, not just the mainland
-    const allNearbyFeature: Feature<Geometry> = {
+    // Get the main polygon's area for filtering
+    const mainArea = geoArea(polygonParts.nearbyPolygons[0])
+
+    // Filter to only significant polygons (at least 1% of main area) for centering/fitting
+    // This prevents tiny islands from stretching the bounding box too much
+    const significantPolygons = polygonParts.nearbyPolygons.filter(p =>
+      geoArea(p) >= mainArea * 0.01
+    )
+
+    // Create a combined feature from significant nearby polygons
+    const significantFeature: Feature<Geometry> = {
       type: 'Feature',
       properties: {},
       geometry: {
         type: 'MultiPolygon',
-        coordinates: polygonParts.nearbyPolygons.map(p => p.geometry.coordinates)
+        coordinates: significantPolygons.map(p => p.geometry.coordinates)
       }
     }
 
-    // Center on all visible parts (fixes Greece, Malta, etc. where islands are close but off-center)
-    const center = geoCentroid(allNearbyFeature)
+    // Center on significant parts (fixes Greece, Malta, etc. where islands are close but off-center)
+    const center = geoCentroid(significantFeature)
 
     // Use Azimuthal Equal-Area projection centered on the country
     // This gives accurate shapes and sizes, especially for polar countries
     // and automatically handles date-line crossing
-    const projection = geoAzimuthalEqualArea()
-      .rotate([-center[0], -center[1]])  // Center on all visible parts
+    const proj = geoAzimuthalEqualArea()
+      .rotate([-center[0], -center[1]])  // Center on significant parts
       .fitExtent(
         [[paddingPx, paddingPx], [width - paddingPx, height - paddingPx]],
-        allNearbyFeature  // Fit to all visible parts
+        significantFeature  // Fit to significant parts only
       )
 
-    const currentScale = projection.scale()
+    const currentScale = proj.scale()
     const finalScale = currentScale * zoomFactor
-    projection.scale(finalScale)
-    projection.translate([width / 2, height / 2])
+    proj.scale(finalScale)
+    proj.translate([width / 2, height / 2])
 
-    return { pathGenerator: geoPath(projection), projectionScale: finalScale }
+    return { pathGenerator: geoPath(proj), projectionScale: finalScale, projection: proj }
   }, [polygonParts, width, height, zoomFactor])
 
   const neighborPaths = useMemo(() => {
@@ -318,101 +326,180 @@ function CountryMapInner({
 
   // Calculate inset boxes for overseas territories (only in quiz mode)
   const insetBoxes = useMemo(() => {
-    if (!polygonParts || polygonParts.insets.length === 0 || mode === 'overview') return []
+    if (!polygonParts || !projection || polygonParts.insets.length === 0 || mode === 'overview') return []
 
     const boxSize = { w: 50, h: 35 }
-    const padding = 6
+    const padding = 0  // Glued to the edge
 
-    // Get mainland centroid for direction calculation
+    // Project the main centroid to screen coordinates
     const mainCentroid = geoCentroid(polygonParts.mainForProjection)
+    const mainScreen = projection(mainCentroid)
+    if (!mainScreen) return []
 
-    // Group insets by direction (N, S, E, W, NE, NW, SE, SW)
-    type Direction = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
-    const directionCounts: Record<Direction, number> = { n: 0, s: 0, e: 0, w: 0, ne: 0, nw: 0, se: 0, sw: 0 }
+    // Track used positions to avoid overlap
+    const usedPositions: { x: number; y: number }[] = []
 
-    return polygonParts.insets.map((inset) => {
+    return polygonParts.insets.map((inset, index) => {
       const insetCentroid = geoCentroid(inset)
 
-      // Calculate direction from main to inset
-      const dLng = insetCentroid[0] - mainCentroid[0]
-      const dLat = insetCentroid[1] - mainCentroid[1]
+      // Project inset centroid to get the direction vector in screen space
+      const insetScreen = projection(insetCentroid)
 
-      // Determine primary direction
-      let direction: Direction
-      const absLng = Math.abs(dLng)
-      const absLat = Math.abs(dLat)
-
-      if (absLat > absLng * 2) {
-        // Primarily north/south
-        direction = dLat > 0 ? 'n' : 's'
-      } else if (absLng > absLat * 2) {
-        // Primarily east/west
-        direction = dLng > 0 ? 'e' : 'w'
+      // Calculate direction vector from main to inset in screen coordinates
+      let dx: number, dy: number
+      if (insetScreen) {
+        dx = insetScreen[0] - mainScreen[0]
+        dy = insetScreen[1] - mainScreen[1]
       } else {
-        // Diagonal
-        if (dLat > 0 && dLng > 0) direction = 'ne'
-        else if (dLat > 0 && dLng < 0) direction = 'nw'
-        else if (dLat < 0 && dLng > 0) direction = 'se'
-        else direction = 'sw'
+        // Fallback to geographic direction if projection fails
+        dx = insetCentroid[0] - mainCentroid[0]
+        dy = -(insetCentroid[1] - mainCentroid[1]) // Flip Y since screen Y is inverted
       }
 
-      // Get position index for this direction (for multiple insets in same direction)
-      const posIndex = directionCounts[direction]++
+      // Normalize the direction vector
+      const length = Math.sqrt(dx * dx + dy * dy)
+      if (length > 0) {
+        dx /= length
+        dy /= length
+      }
 
-      // Calculate position based on direction
+      // Calculate position along the edge of the screen in that direction
+      // Find where the ray from center intersects the screen edge (with padding)
+      const centerX = width / 2
+      const centerY = height / 2
+      const edgePadding = padding + boxSize.w / 2
+
       let x: number, y: number
-      const offset = posIndex * (boxSize.w + 4)
 
-      switch (direction) {
-        case 'n':
-          x = width / 2 - boxSize.w / 2 + offset
-          y = padding
-          break
-        case 's':
-          x = width / 2 - boxSize.w / 2 + offset
-          y = height - padding - boxSize.h
-          break
-        case 'e':
-          x = width - padding - boxSize.w
-          y = height / 2 - boxSize.h / 2 + offset
-          break
-        case 'w':
-          x = padding
-          y = height / 2 - boxSize.h / 2 + offset
-          break
-        case 'ne':
-          x = width - padding - boxSize.w - offset
-          y = padding
-          break
-        case 'nw':
-          x = padding + offset
-          y = padding
-          break
-        case 'se':
-          x = width - padding - boxSize.w - offset
-          y = height - padding - boxSize.h
-          break
-        case 'sw':
-        default:
-          x = padding + offset
-          y = height - padding - boxSize.h
-          break
+      if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+        // No direction, default to top-left
+        x = padding
+        y = padding
+      } else {
+        // Calculate intersection with each edge and find the closest one
+        const intersections: { x: number; y: number; t: number }[] = []
+
+        // Left edge
+        if (dx < 0) {
+          const t = (edgePadding - centerX) / dx
+          const iy = centerY + t * dy
+          if (iy >= padding && iy <= height - padding - boxSize.h) {
+            intersections.push({ x: padding, y: iy - boxSize.h / 2, t: Math.abs(t) })
+          }
+        }
+        // Right edge
+        if (dx > 0) {
+          const t = (width - edgePadding - centerX) / dx
+          const iy = centerY + t * dy
+          if (iy >= padding && iy <= height - padding - boxSize.h) {
+            intersections.push({ x: width - padding - boxSize.w, y: iy - boxSize.h / 2, t: Math.abs(t) })
+          }
+        }
+        // Top edge
+        if (dy < 0) {
+          const t = (edgePadding - centerY) / dy
+          const ix = centerX + t * dx
+          if (ix >= padding && ix <= width - padding - boxSize.w) {
+            intersections.push({ x: ix - boxSize.w / 2, y: padding, t: Math.abs(t) })
+          }
+        }
+        // Bottom edge
+        if (dy > 0) {
+          const t = (height - edgePadding - centerY) / dy
+          const ix = centerX + t * dx
+          if (ix >= padding && ix <= width - padding - boxSize.w) {
+            intersections.push({ x: ix - boxSize.w / 2, y: height - padding - boxSize.h, t: Math.abs(t) })
+          }
+        }
+
+        if (intersections.length > 0) {
+          // Pick the closest intersection
+          intersections.sort((a, b) => a.t - b.t)
+          let pos = intersections[0]
+
+          // Clamp to valid range
+          x = Math.max(padding, Math.min(width - padding - boxSize.w, pos.x))
+          y = Math.max(padding, Math.min(height - padding - boxSize.h, pos.y))
+        } else {
+          // Fallback to corner based on direction
+          x = dx < 0 ? padding : width - padding - boxSize.w
+          y = dy < 0 ? padding : height - padding - boxSize.h
+        }
       }
 
-      // Create a projection for this inset, centered on the territory
+      // Avoid overlap with previous insets
+      for (const used of usedPositions) {
+        const overlapX = Math.abs(x - used.x) < boxSize.w + 4
+        const overlapY = Math.abs(y - used.y) < boxSize.h + 4
+        if (overlapX && overlapY) {
+          // Shift along the edge
+          if (y <= padding + 1 || y >= height - padding - boxSize.h - 1) {
+            // On top/bottom edge, shift horizontally
+            x += boxSize.w + 4
+            if (x > width - padding - boxSize.w) x = padding
+          } else {
+            // On left/right edge, shift vertically
+            y += boxSize.h + 4
+            if (y > height - padding - boxSize.h) y = padding
+          }
+        }
+      }
+
+      usedPositions.push({ x, y })
+
+      // Create a projection for this inset using the same scale as main map
+      // but clamped so tiny islands aren't invisible and huge territories aren't enormous
       const insetCenter = geoCentroid(inset)
+
+      // First, create a projection at the main scale to see how big this territory would be
+      const testProjection = geoAzimuthalEqualArea()
+        .rotate([-insetCenter[0], -insetCenter[1]])
+        .scale(projectionScale)
+        .translate([0, 0])
+
+      // Calculate bounds at main scale
+      const testPath = geoPath(testProjection)
+      const bounds = testPath.bounds(inset)
+      const naturalWidth = bounds[1][0] - bounds[0][0]
+      const naturalHeight = bounds[1][1] - bounds[0][1]
+
+      // Define min/max box sizes
+      const minBoxSize = 30
+      const maxBoxSize = 80
+
+      // Calculate what box size we'd need at main scale
+      const paddingInset = 4
+      const neededWidth = naturalWidth + paddingInset * 2
+      const neededHeight = naturalHeight + paddingInset * 2
+
+      // Clamp the box size
+      const clampedWidth = Math.max(minBoxSize, Math.min(maxBoxSize, neededWidth))
+      const clampedHeight = Math.max(minBoxSize, Math.min(maxBoxSize, neededHeight))
+
+      // Calculate scale adjustment if we had to clamp
+      const scaleX = (clampedWidth - paddingInset * 2) / naturalWidth
+      const scaleY = (clampedHeight - paddingInset * 2) / naturalHeight
+      const scaleFactor = Math.min(scaleX, scaleY)
+
+      // Create final projection with adjusted scale
+      const finalScale = projectionScale * scaleFactor
       const insetProjection = geoAzimuthalEqualArea()
         .rotate([-insetCenter[0], -insetCenter[1]])
-        .fitExtent(
-          [[2, 2], [boxSize.w - 2, boxSize.h - 2]],
-          inset
-        )
+        .scale(finalScale)
+        .translate([clampedWidth / 2, clampedHeight / 2])
+
       const insetPath = geoPath(insetProjection)
       const d = insetPath(inset) || ''
 
-      return { x, y, w: boxSize.w, h: boxSize.h, d, key: `inset-${direction}-${posIndex}` }
+      // Track which edges touch the SVG border (for stroke rendering)
+      const touchesLeft = x <= 0
+      const touchesTop = y <= 0
+      const touchesRight = x + clampedWidth >= width
+      const touchesBottom = y + clampedHeight >= height
+
+      return { x, y, w: clampedWidth, h: clampedHeight, d, key: `inset-${index}`, touchesLeft, touchesTop, touchesRight, touchesBottom }
     })
-  }, [polygonParts, width, height, mode])
+  }, [polygonParts, projection, projectionScale, width, height, mode])
 
   // Calculate stroke width based on projection scale
   // Low scale (zoomed out) = thinner strokes, high scale (zoomed in) = normal strokes
@@ -476,25 +563,50 @@ function CountryMapInner({
         />
       ))}
 
+      {/* Define clip paths for inset boxes */}
+      <defs>
+        {insetBoxes.map(({ w, h, key }) => (
+          <clipPath key={`clip-${key}`} id={`clip-${key}`}>
+            <rect width={w} height={h} rx={2} />
+          </clipPath>
+        ))}
+      </defs>
+
       {/* Render inset boxes for overseas territories */}
-      {insetBoxes.map(({ x, y, w, h, d, key }) => (
-        <g key={key} transform={`translate(${x}, ${y})`}>
-          {/* Box background */}
-          <rect
-            width={w}
-            height={h}
-            fill="#1a3a5c"
-            stroke="#4ade80"
-            strokeWidth={1}
-            rx={2}
-          />
-          {/* Territory shape */}
-          <path
-            d={d}
-            fill="#4ade80"
-          />
-        </g>
-      ))}
+      {insetBoxes.map(({ x, y, w, h, d, key, touchesLeft, touchesTop, touchesRight, touchesBottom }) => {
+        // Build stroke path only for edges that don't touch the SVG border
+        const strokeSegments: string[] = []
+        if (!touchesTop) strokeSegments.push(`M0,0 L${w},0`)
+        if (!touchesRight) strokeSegments.push(`M${w},0 L${w},${h}`)
+        if (!touchesBottom) strokeSegments.push(`M${w},${h} L0,${h}`)
+        if (!touchesLeft) strokeSegments.push(`M0,${h} L0,0`)
+
+        return (
+          <g key={key} transform={`translate(${x}, ${y})`}>
+            {/* Box background */}
+            <rect
+              width={w}
+              height={h}
+              fill="#1a3a5c"
+            />
+            {/* Territory shape - clipped to box */}
+            <path
+              d={d}
+              clipPath={`url(#clip-${key})`}
+              fill="#4ade80"
+            />
+            {/* Stroke only on non-edge sides */}
+            {strokeSegments.length > 0 && (
+              <path
+                d={strokeSegments.join(' ')}
+                stroke="#4ade80"
+                strokeWidth={1}
+                fill="none"
+              />
+            )}
+          </g>
+        )
+      })}
     </svg>
   )
 }
