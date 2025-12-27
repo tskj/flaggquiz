@@ -1380,7 +1380,7 @@ export default function App() {
         {isCapitalInputQuiz(quizType) ? (
           /* Capital input quiz: Map with flag overlay + country name as question */
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
-            <div className="relative aspect-video mb-3">
+            <div className="relative aspect-video mb-3 rounded-lg overflow-hidden">
               <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
               <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg bg-gray-800">
                 <img
@@ -1402,21 +1402,23 @@ export default function App() {
         ) : isKidsMapQuiz(quizType) ? (
           /* Kids map quiz: Map + country name as question */
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-10 sm:mb-14">
-            <div className="aspect-video mb-2">
+            <div className="aspect-video mb-2 rounded-lg overflow-hidden">
               <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
             </div>
             <p className="text-white text-xl sm:text-2xl font-bold text-center">{correctAnswer}</p>
           </div>
         ) : isMapQuiz(quizType) ? (
-          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4">
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4 rounded-lg overflow-hidden">
             <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
           </div>
         ) : (
-          <img
-            src={flagUrl}
-            alt="Flagg"
-            className={`w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 object-contain ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}
-          />
+          <div className={`w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg rounded-lg overflow-hidden ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}>
+            <img
+              src={flagUrl}
+              alt="Flagg"
+              className="w-full h-auto"
+            />
+          </div>
         )}
 
         {isCapitalInputQuiz(quizType) ? (
