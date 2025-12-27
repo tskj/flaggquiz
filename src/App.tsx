@@ -7,6 +7,7 @@ import { CountryMap, preloadMapData } from './CountryMap'
 import { PrerenderedCountryMap } from './PrerenderedCountryMap'
 import { getQuizOptions } from './kidsQuizData'
 import { europeanCapitals, getCapitalAlternatives, capitalCoordinates } from './europeanCapitals'
+import { getFlagFocalPoint } from './flagFocalPoints'
 
 // Start preloading map data immediately
 preloadMapData()
@@ -1267,6 +1268,7 @@ export default function App() {
                           src={flagUrl}
                           alt={name}
                           className="absolute inset-0 w-full h-full object-cover"
+                          style={{ objectPosition: getFlagFocalPoint(country) }}
                         />
                       </div>
                       <div className="px-2 py-2 flex flex-col items-center">
@@ -1308,6 +1310,7 @@ export default function App() {
                           src={flagUrl}
                           alt={name}
                           className="w-full h-full object-cover"
+                          style={{ objectPosition: getFlagFocalPoint(country) }}
                         />
                       </div>
                       <div className="px-2 py-2 flex flex-col items-center">
@@ -1483,6 +1486,7 @@ export default function App() {
                       src={optionFlagUrl}
                       alt="Flagg"
                       className="w-full h-full object-cover"
+                      style={{ objectPosition: getFlagFocalPoint(option) }}
                     />
                   </button>
                 )
@@ -1543,6 +1547,7 @@ export default function App() {
                     src={optionFlagUrl}
                     alt="Flagg"
                     className="w-full h-full object-cover"
+                    style={{ objectPosition: getFlagFocalPoint(option) }}
                   />
                 </button>
               )
