@@ -316,15 +316,14 @@ export default function App() {
   const [quizStarted, setQuizStarted] = useState(false)
   const [quizFinished, setQuizFinished] = useState(false)
   const [currentQueue, setCurrentQueue] = useState<string[]>([])
-  const [skippedFlags, setSkippedFlags] = useState<string[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [input, setInput] = useState('')
   const [timeRemaining, setTimeRemaining] = useState(15 * 60)
   const [practiceMode, setPracticeMode] = useState(false)
-  const [hasSeenAll, setHasSeenAll] = useState(false)  // Have we gone through all flags at least once?
   const [justAnswered, setJustAnswered] = useState(false)
   const [quizOrder, setQuizOrder] = useState<string[]>([])
   const [correctFlags, setCorrectFlags] = useState<Set<string>>(new Set())
+  const [seenFlags, setSeenFlags] = useState<Set<string>>(new Set())  // All flags ever shown (only grows)
   const [showAllResults, setShowAllResults] = useState(false)
   const [struggledFlags, setStruggledFlags] = useState<Map<string, string[]>>(new Map())
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
@@ -334,6 +333,7 @@ export default function App() {
 
   // Derived state - computed during render, not via useEffect
   const completedCount = correctFlags.size
+  const hasSeenAll = seenFlags.size >= quizOrder.length && quizOrder.length > 0
 
   // Get the appropriate flags and names based on quiz type
   const getQuizFlags = (type: QuizType) => {
@@ -389,27 +389,30 @@ export default function App() {
   const hasMovedToHistory = useRef(false)
 
   // Build current session object for saving
+  // Derives skippedFlags from current queue state for backwards-compatible storage
   const buildSession = useCallback((): QuizSession | null => {
     if (!sessionId) return null
+    // For storage: skippedFlags = flags in current queue that we've passed but not answered correctly
+    const skippedInCurrentPass = currentQueue.slice(0, currentIndex).filter(f => !correctFlags.has(f))
     return {
       id: sessionId,
       startedAt: parseInt(sessionId),
       finishedAt: quizFinished ? Date.now() : undefined,
-      timerEnabled: !practiceMode,  // Storage uses timerEnabled for backwards compat
+      timerEnabled: !practiceMode,
       timeRemaining,
       quizType,
       quizOrder,
       currentQueue,
       currentIndex,
-      skippedFlags,
-      round: hasSeenAll ? 2 : 1,  // Storage uses round for backwards compat
+      skippedFlags: skippedInCurrentPass,
+      round: hasSeenAll ? 2 : 1,
       correctFlags: Array.from(correctFlags),
       struggledFlags: Object.fromEntries(struggledFlags),
       currentAttempts,
       pendingWrongMatch,
       input,
     }
-  }, [sessionId, quizFinished, practiceMode, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, skippedFlags, hasSeenAll, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
+  }, [sessionId, quizFinished, practiceMode, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, hasSeenAll, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
 
   // Load session on mount
   useEffect(() => {
@@ -424,13 +427,23 @@ export default function App() {
       setQuizOrder(saved.quizOrder)
       setCurrentQueue(saved.currentQueue)
       setCurrentIndex(saved.currentIndex)
-      setSkippedFlags(saved.skippedFlags)
-      setHasSeenAll(saved.round > 1)  // round > 1 means we've seen all at least once
       setCorrectFlags(new Set(saved.correctFlags))
       setStruggledFlags(new Map(Object.entries(saved.struggledFlags)))
       setCurrentAttempts(saved.currentAttempts)
       setPendingWrongMatch(saved.pendingWrongMatch)
       setInput(saved.input)
+      // Reconstruct seenFlags from saved state
+      // If round > 1, all flags have been seen; otherwise, it's correct + skipped + current queue up to index
+      if (saved.round > 1) {
+        setSeenFlags(new Set(saved.quizOrder))
+      } else {
+        const seen = new Set([
+          ...saved.correctFlags,
+          ...saved.skippedFlags,
+          ...saved.currentQueue.slice(0, saved.currentIndex)
+        ])
+        setSeenFlags(seen)
+      }
       // Mark if already finished to avoid duplicate history entries on refresh
       if (saved.finishedAt) {
         wasFinishedOnLoad.current = true
@@ -547,13 +560,12 @@ export default function App() {
     setQuizType(type)
     setCurrentQueue(shuffled)
     setQuizOrder(shuffled)
-    setSkippedFlags([])
     setCurrentIndex(0)
     setTimeRemaining(defaultTime)
-    setHasSeenAll(false)
     setQuizStarted(true)
     setQuizFinished(false)
     setCorrectFlags(new Set())
+    setSeenFlags(new Set([shuffled[0]]))  // First flag is immediately seen
     setShowAllResults(false)
     setStruggledFlags(new Map())
     setCurrentAttempts([])
@@ -645,29 +657,29 @@ export default function App() {
     setSessionId(null)
   }
 
-  const moveToNext = (wasSkipped: boolean) => {
-    const newSkipped = wasSkipped
-      ? [...skippedFlags, currentCountry]
-      : skippedFlags
-
+  const moveToNext = (_wasSkipped: boolean) => {
     // Save any attempts made on this flag (even if skipping)
     if (currentAttempts.length > 0) {
       setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts]))
     }
 
     if (currentIndex + 1 < currentQueue.length) {
+      // Move to next flag and mark it as seen
+      const nextFlag = currentQueue[currentIndex + 1]
+      setSeenFlags(prev => new Set(prev).add(nextFlag))
       setCurrentIndex(currentIndex + 1)
-      if (wasSkipped) setSkippedFlags(newSkipped)
-    } else if (newSkipped.length > 0) {
-      // We've now seen all flags at least once
-      setHasSeenAll(true)
-      // Keep original order from quizOrder for subsequent passes
-      const orderedSkipped = newSkipped.sort((a, b) => quizOrder.indexOf(a) - quizOrder.indexOf(b))
-      setCurrentQueue(orderedSkipped)
-      setSkippedFlags([])
-      setCurrentIndex(0)
     } else {
-      setQuizFinished(true)
+      // End of current pass - check for remaining incorrect flags
+      const remainingIncorrect = quizOrder.filter(f => !correctFlags.has(f))
+      if (remainingIncorrect.length > 0) {
+        // Start new pass with remaining flags (in original order)
+        setCurrentQueue(remainingIncorrect)
+        setCurrentIndex(0)
+        // Mark first flag of new pass as seen
+        setSeenFlags(prev => new Set(prev).add(remainingIncorrect[0]))
+      } else {
+        setQuizFinished(true)
+      }
     }
     setInput('')
     setCurrentAttempts([])
@@ -676,9 +688,6 @@ export default function App() {
 
   const goBack = () => {
     if (currentIndex > 0) {
-      // Remove current flag from skipped if it was just skipped
-      const prevFlag = currentQueue[currentIndex - 1]
-      setSkippedFlags(prev => prev.filter(f => f !== prevFlag))
       setCurrentIndex(currentIndex - 1)
       setInput('')
       setCurrentAttempts([])
@@ -784,12 +793,8 @@ export default function App() {
   }
 
   if (quizFinished) {
-    // Calculate which flags were never reached (still in queue after current position when quiz ended)
-    // But exclude skipped flags - those were seen and should show as red, not gray
-    // If hasSeenAll is true, all flags were seen at least once, so nothing is "unreached"
-    const unreachedFlags = hasSeenAll
-      ? new Set<string>()
-      : new Set(currentQueue.slice(currentIndex + 1).filter(f => !skippedFlags.includes(f)))
+    // Unreached = flags that were never shown to the user (not in seenFlags)
+    const unreachedFlags = new Set(quizOrder.filter(f => !seenFlags.has(f)))
 
     const failedFlags = quizOrder.filter(country => !correctFlags.has(country) && !unreachedFlags.has(country))
     const struggledOnly = quizOrder.filter(country => correctFlags.has(country) && struggledFlags.has(country))
@@ -901,7 +906,8 @@ export default function App() {
   const flagUrl = currentFlags[currentCountry as keyof typeof currentFlags]
   // Count inclusive of current flag
   const remainingIncludingCurrent = currentQueue.length - currentIndex
-  const skippedCount = skippedFlags.length
+  // Skipped this pass = flags we've passed in current queue that aren't correct yet
+  const skippedThisPass = currentQueue.slice(0, currentIndex).filter(f => !correctFlags.has(f)).length
   const quizTypeName = getQuizTypeName(quizType)
 
   // Build the remaining text (used before hasSeenAll)
@@ -919,20 +925,20 @@ export default function App() {
             <span className="text-gray-500">{quizTypeName}</span>
             <div className="flex gap-2 sm:gap-4">
               {hasSeenAll ? (
-                // After seeing all, show total bucket size (remaining + already skipped this pass)
+                // After seeing all, show total incorrect remaining (updates immediately on correct answer)
                 (() => {
-                  const totalBucket = remainingIncludingCurrent + skippedCount
+                  const totalIncorrect = quizOrder.filter(f => !correctFlags.has(f)).length
                   return (
-                    <span className={totalBucket === 1 ? 'text-yellow-400 font-bold' : 'text-yellow-500'}>
-                      {totalBucket === 1 ? 'Siste!' : `${totalBucket} hoppet over`}
+                    <span className={totalIncorrect === 1 ? 'text-yellow-400 font-bold' : 'text-yellow-500'}>
+                      {totalIncorrect === 1 ? 'Siste!' : `${totalIncorrect} hoppet over`}
                     </span>
                   )
                 })()
               ) : (
                 <>
                   <span className={remainingIncludingCurrent === 1 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>{remainingText}</span>
-                  {skippedCount > 0 && (
-                    <span className="text-yellow-500">{skippedCount} hoppet over</span>
+                  {skippedThisPass > 0 && (
+                    <span className="text-yellow-500">{skippedThisPass} hoppet over</span>
                   )}
                 </>
               )}
