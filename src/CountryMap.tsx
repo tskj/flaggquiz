@@ -9,7 +9,9 @@ interface PolygonParts {
   mainForProjection: Feature<Polygon>  // Largest polygon (possibly clipped), used for projection bounds
   mainForRendering: Feature<Polygon>   // Original largest polygon for rendering
   nearbyPolygons: Feature<Polygon>[]   // All polygons to render in main view (includes main + nearby islands)
-  insets: Feature<Polygon>[]           // Distant territories for inset boxes
+  tinyDistantIslands: Feature<Polygon>[] // Small distant islands rendered in main view without insets
+  insets: Feature<Polygon>[]           // Distant territories for inset boxes (flat list)
+  insetGroups: Feature<Polygon>[][]    // Distant territories grouped by proximity (for rendering)
   spansDateLine: boolean               // Whether the country spans the date line
 }
 
@@ -42,6 +44,61 @@ function clipToEasternHemisphere(poly: Feature<Polygon>): Feature<Polygon> {
   }
 }
 
+// Group nearby polygons together (for island archipelagos like Svalbard)
+function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][] {
+  if (polygons.length === 0) return []
+  if (polygons.length === 1) return [polygons]
+
+  // Calculate bounds for each polygon
+  const polygonsWithBounds = polygons.map(p => ({
+    poly: p,
+    bounds: geoBounds(p),
+    centroid: geoCentroid(p)
+  }))
+
+  // Group polygons that are within 10 degrees of each other (for archipelagos like Svalbard)
+  const groups: Feature<Polygon>[][] = []
+  const used = new Set<number>()
+
+  for (let i = 0; i < polygonsWithBounds.length; i++) {
+    if (used.has(i)) continue
+
+    const group: Feature<Polygon>[] = [polygonsWithBounds[i].poly]
+    used.add(i)
+
+    // Find all polygons close to any polygon in the current group
+    let foundMore = true
+    while (foundMore) {
+      foundMore = false
+      for (let j = 0; j < polygonsWithBounds.length; j++) {
+        if (used.has(j)) continue
+
+        const b = polygonsWithBounds[j]
+
+        // Check if this polygon is within 10 degrees of ANY polygon in the group
+        for (const groupPoly of group) {
+          const a = polygonsWithBounds.find(p => p.poly === groupPoly)!
+          const dist = Math.sqrt(
+            Math.pow(a.centroid[0] - b.centroid[0], 2) +
+            Math.pow(a.centroid[1] - b.centroid[1], 2)
+          )
+
+          if (dist < 10) {
+            group.push(b.poly)
+            used.add(j)
+            foundMore = true
+            break
+          }
+        }
+      }
+    }
+
+    groups.push(group)
+  }
+
+  return groups
+}
+
 // Extract polygons into: main (for projection), nearby (for main view), and insets (for boxes)
 function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
   const geom = feat.geometry
@@ -51,7 +108,9 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
       mainForProjection: poly,
       mainForRendering: poly,
       nearbyPolygons: [poly],
+      tinyDistantIslands: [],
       insets: [],
+      insetGroups: [],
       spansDateLine: false
     }
   }
@@ -85,17 +144,18 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
       mainForProjection = clipToEasternHemisphere(mainForRendering)
     }
 
-    // Add moderate padding to main bounds (3° in each direction)
-    // This keeps nearby islands like Lofoten with mainland, but separates truly distant territories
+    // Add moderate padding to main bounds (5° in each direction)
+    // This keeps coastal islands with mainland, but separates distant territories like Svalbard
     const mainBounds = geoBounds(mainForProjection)
     const paddedBounds = {
-      minLng: mainBounds[0][0] - 3,
-      minLat: mainBounds[0][1] - 3,
-      maxLng: mainBounds[1][0] + 3,
-      maxLat: mainBounds[1][1] + 3,
+      minLng: mainBounds[0][0] - 5,
+      minLat: mainBounds[0][1] - 5,
+      maxLng: mainBounds[1][0] + 5,
+      maxLat: mainBounds[1][1] + 5,
     }
 
     const nearbyPolygons: Feature<Polygon>[] = [mainForRendering]
+    const tinyDistantIslands: Feature<Polygon>[] = []
     const insets: Feature<Polygon>[] = []
 
     const mainLng = geoCentroid(mainForProjection)[0]
@@ -123,9 +183,12 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
         bounds[0][1] > paddedBounds.maxLat    // Entirely north of padded main
 
       if (isDistant) {
-        // Only include in insets if significant (at least 0.5% of main area)
-        if (area >= mainArea * 0.005) {
+        // Significant distant territories (>= 0.2% of main) get inset boxes
+        // Tiny distant islands (< 0.2% but >= 0.05%) are rendered in main view as dots
+        if (area >= mainArea * 0.002) {
           insets.push(poly)
+        } else if (area >= mainArea * 0.0005) {
+          tinyDistantIslands.push(poly)
         }
       } else {
         // Nearby - include in main view rendering
@@ -133,7 +196,10 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
       }
     }
 
-    return { mainForProjection, mainForRendering, nearbyPolygons, insets, spansDateLine: crossesDateLine }
+    // Group nearby inset polygons together (e.g., Svalbard islands)
+    const insetGroups = groupNearbyPolygons(insets)
+
+    return { mainForProjection, mainForRendering, nearbyPolygons, tinyDistantIslands, insets, insetGroups, spansDateLine: crossesDateLine }
   }
   // Fallback
   const poly = feat as Feature<Polygon>
@@ -141,7 +207,9 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
     mainForProjection: poly,
     mainForRendering: poly,
     nearbyPolygons: [poly],
+    tinyDistantIslands: [],
     insets: [],
+    insetGroups: [],
     spansDateLine: false
   }
 }
@@ -187,7 +255,10 @@ interface CountryFeature extends Feature<Geometry> {
 }
 
 // Countries where insets don't make sense - just show everything in the main view
-const countriesWithoutInsets = ['Bahamas', 'Canada']
+const countriesWithoutInsets = ['Bahamas', 'Canada', 'Denmark']
+
+// Fixed global zoom level for "see where in the world" view
+const GLOBAL_CONTEXT_ZOOM = 150
 
 function CountryMapInner({
   highlightedCountry,
@@ -196,11 +267,20 @@ function CountryMapInner({
   mode = 'quiz',
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview zooms in on the country
-  const zoomFactor = mode === 'overview' ? 3.5 : 0.5
+  const baseZoomFactor = mode === 'overview' ? 3.5 : 0.5
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
   const [showInsetsState, setShowInsetsState] = useState(true)
+  const [zoomedOutForContext, setZoomedOutForContext] = useState(false)
+  const [lastCountry, setLastCountry] = useState(highlightedCountry)
+
+  // Reset zoom state synchronously when country changes (avoids flash)
+  if (highlightedCountry !== lastCountry) {
+    setLastCountry(highlightedCountry)
+    setShowInsetsState(true)
+    setZoomedOutForContext(false)
+  }
 
   // Some countries should never use insets
   const forceNoInsets = countriesWithoutInsets.includes(highlightedCountry)
@@ -247,8 +327,16 @@ function CountryMapInner({
     return getPolygonParts(targetFeature50m)
   }, [targetFeature50m])
 
-  // Only show inset toggle if there are insets AND this country isn't in the no-insets list
+  // Check if this country has insets
   const hasInsets = !forceNoInsets && polygonParts?.insets && polygonParts.insets.length > 0
+
+  // All countries can toggle zoom
+  const canToggleZoom = true
+
+  // Use fixed global zoom level when zoomed out for context (for non-inset countries)
+  // For inset countries, the zoom is controlled by showInsets logic
+  const useGlobalZoom = zoomedOutForContext && !hasInsets
+  const zoomFactor = useGlobalZoom ? null : baseZoomFactor  // null signals to use fixed scale
 
   const { pathGenerator, projectionScale, projection } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000, projection: null }
@@ -266,11 +354,12 @@ function CountryMapInner({
 
     // Filter to only significant polygons (at least 1% of main area) for centering/fitting
     // This prevents tiny islands from stretching the bounding box too much
-    const significantPolygons = allPolygons.filter(p =>
-      geoArea(p) >= mainArea * 0.01
-    )
+    // BUT: when showing all (insets hidden), include everything so distant territories are visible
+    const significantPolygons = showInsets
+      ? allPolygons.filter(p => geoArea(p) >= mainArea * 0.01)
+      : allPolygons
 
-    // Create a combined feature from significant nearby polygons
+    // Create a combined feature from polygons to fit
     const significantFeature: Feature<Geometry> = {
       type: 'Feature',
       properties: {},
@@ -294,12 +383,13 @@ function CountryMapInner({
       )
 
     const currentScale = proj.scale()
-    const finalScale = currentScale * zoomFactor
+    // Use fixed global zoom for context view, otherwise use the calculated zoom factor
+    const finalScale = useGlobalZoom ? GLOBAL_CONTEXT_ZOOM : currentScale * zoomFactor!
     proj.scale(finalScale)
     proj.translate([width / 2, height / 2])
 
     return { pathGenerator: geoPath(proj), projectionScale: finalScale, projection: proj }
-  }, [polygonParts, width, height, zoomFactor, showInsets])
+  }, [polygonParts, width, height, zoomFactor, showInsets, useGlobalZoom])
 
   const neighborPaths = useMemo(() => {
     if (!countries50m || !pathGenerator) return []
@@ -333,11 +423,12 @@ function CountryMapInner({
     }
 
     // Render all nearby polygons (mainland + nearby islands like Lofoten)
+    // Always render tiny distant islands (they appear as dots, don't get insets)
     // When insets are hidden, also render the inset polygons in the main view
     const baseParts = use10m && parts10m ? parts10m : polygonParts
     const polygonsToRender = showInsets
-      ? baseParts.nearbyPolygons
-      : [...baseParts.nearbyPolygons, ...baseParts.insets]
+      ? [...baseParts.nearbyPolygons, ...baseParts.tinyDistantIslands]
+      : [...baseParts.nearbyPolygons, ...baseParts.tinyDistantIslands, ...baseParts.insets]
 
     return polygonsToRender
       .map((poly, i) => ({ key: `target-${i}`, d: pathGenerator(poly) || '' }))
@@ -346,9 +437,8 @@ function CountryMapInner({
 
   // Calculate inset boxes for overseas territories (only in quiz mode, and only when showInsets is true)
   const insetBoxes = useMemo(() => {
-    if (!polygonParts || !projection || polygonParts.insets.length === 0 || mode === 'overview' || !showInsets) return []
+    if (!polygonParts || !projection || polygonParts.insetGroups.length === 0 || mode === 'overview' || !showInsets) return []
 
-    const boxSize = { w: 50, h: 35 }
     const padding = 0  // Glued to the edge
 
     // Project the main centroid to screen coordinates
@@ -357,23 +447,33 @@ function CountryMapInner({
     if (!mainScreen) return []
 
     // Track used positions to avoid overlap
-    const usedPositions: { x: number; y: number }[] = []
+    const usedPositions: { x: number; y: number; w: number; h: number }[] = []
 
-    return polygonParts.insets.map((inset, index) => {
-      const insetCentroid = geoCentroid(inset)
+    return polygonParts.insetGroups.map((group, index) => {
+      // Create a combined feature for the whole group (for bounds and centroid calculation)
+      const combinedFeature: Feature<Geometry> = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: group.map(p => p.geometry.coordinates)
+        }
+      }
 
-      // Project inset centroid to get the direction vector in screen space
-      const insetScreen = projection(insetCentroid)
+      const groupCentroid = geoCentroid(combinedFeature)
 
-      // Calculate direction vector from main to inset in screen coordinates
+      // Project group centroid to get the direction vector in screen space
+      const groupScreen = projection(groupCentroid)
+
+      // Calculate direction vector from main to group in screen coordinates
       let dx: number, dy: number
-      if (insetScreen) {
-        dx = insetScreen[0] - mainScreen[0]
-        dy = insetScreen[1] - mainScreen[1]
+      if (groupScreen) {
+        dx = groupScreen[0] - mainScreen[0]
+        dy = groupScreen[1] - mainScreen[1]
       } else {
         // Fallback to geographic direction if projection fails
-        dx = insetCentroid[0] - mainCentroid[0]
-        dy = -(insetCentroid[1] - mainCentroid[1]) // Flip Y since screen Y is inverted
+        dx = groupCentroid[0] - mainCentroid[0]
+        dy = -(groupCentroid[1] - mainCentroid[1]) // Flip Y since screen Y is inverted
       }
 
       // Normalize the direction vector
@@ -383,11 +483,34 @@ function CountryMapInner({
         dy /= length
       }
 
-      // Calculate position along the edge of the screen in that direction
-      // Find where the ray from center intersects the screen edge (with padding)
+      // Create a projection for this group using the same scale as main map
+      // but clamped so tiny islands aren't invisible and huge territories aren't enormous
+      const groupCenter = groupCentroid
+
+      // First, create a projection at the main scale to see how big this group would be
+      const testProjection = geoAzimuthalEqualArea()
+        .rotate([-groupCenter[0], -groupCenter[1]])
+        .scale(projectionScale)
+        .translate([0, 0])
+
+      // Calculate bounds at main scale for the whole group
+      const testPath = geoPath(testProjection)
+      const bounds = testPath.bounds(combinedFeature)
+      const naturalWidth = bounds[1][0] - bounds[0][0]
+      const naturalHeight = bounds[1][1] - bounds[0][1]
+
+      // Define min/max box sizes
+      const minBoxSize = 30
+      const maxBoxSize = 80
+
+      // Clamp the box size
+      const clampedWidth = Math.max(minBoxSize, Math.min(maxBoxSize, naturalWidth))
+      const clampedHeight = Math.max(minBoxSize, Math.min(maxBoxSize, naturalHeight))
+
+      // Calculate position along the edge of the screen
       const centerX = width / 2
       const centerY = height / 2
-      const edgePadding = padding + boxSize.w / 2
+      const edgePadding = padding + clampedWidth / 2
 
       let x: number, y: number
 
@@ -403,121 +526,107 @@ function CountryMapInner({
         if (dx < 0) {
           const t = (edgePadding - centerX) / dx
           const iy = centerY + t * dy
-          if (iy >= padding && iy <= height - padding - boxSize.h) {
-            intersections.push({ x: padding, y: iy - boxSize.h / 2, t: Math.abs(t) })
+          if (iy >= padding && iy <= height - padding - clampedHeight) {
+            intersections.push({ x: padding, y: iy - clampedHeight / 2, t: Math.abs(t) })
           }
         }
         // Right edge
         if (dx > 0) {
           const t = (width - edgePadding - centerX) / dx
           const iy = centerY + t * dy
-          if (iy >= padding && iy <= height - padding - boxSize.h) {
-            intersections.push({ x: width - padding - boxSize.w, y: iy - boxSize.h / 2, t: Math.abs(t) })
+          if (iy >= padding && iy <= height - padding - clampedHeight) {
+            intersections.push({ x: width - padding - clampedWidth, y: iy - clampedHeight / 2, t: Math.abs(t) })
           }
         }
         // Top edge
         if (dy < 0) {
           const t = (edgePadding - centerY) / dy
           const ix = centerX + t * dx
-          if (ix >= padding && ix <= width - padding - boxSize.w) {
-            intersections.push({ x: ix - boxSize.w / 2, y: padding, t: Math.abs(t) })
+          if (ix >= padding && ix <= width - padding - clampedWidth) {
+            intersections.push({ x: ix - clampedWidth / 2, y: padding, t: Math.abs(t) })
           }
         }
         // Bottom edge
         if (dy > 0) {
           const t = (height - edgePadding - centerY) / dy
           const ix = centerX + t * dx
-          if (ix >= padding && ix <= width - padding - boxSize.w) {
-            intersections.push({ x: ix - boxSize.w / 2, y: height - padding - boxSize.h, t: Math.abs(t) })
+          if (ix >= padding && ix <= width - padding - clampedWidth) {
+            intersections.push({ x: ix - clampedWidth / 2, y: height - padding - clampedHeight, t: Math.abs(t) })
           }
         }
 
         if (intersections.length > 0) {
           // Pick the closest intersection
           intersections.sort((a, b) => a.t - b.t)
-          let pos = intersections[0]
+          const pos = intersections[0]
 
           // Clamp to valid range
-          x = Math.max(padding, Math.min(width - padding - boxSize.w, pos.x))
-          y = Math.max(padding, Math.min(height - padding - boxSize.h, pos.y))
+          x = Math.max(padding, Math.min(width - padding - clampedWidth, pos.x))
+          y = Math.max(padding, Math.min(height - padding - clampedHeight, pos.y))
         } else {
           // Fallback to corner based on direction
-          x = dx < 0 ? padding : width - padding - boxSize.w
-          y = dy < 0 ? padding : height - padding - boxSize.h
+          x = dx < 0 ? padding : width - padding - clampedWidth
+          y = dy < 0 ? padding : height - padding - clampedHeight
         }
       }
 
       // Avoid overlap with previous insets
       for (const used of usedPositions) {
-        const overlapX = Math.abs(x - used.x) < boxSize.w + 4
-        const overlapY = Math.abs(y - used.y) < boxSize.h + 4
+        const overlapX = Math.abs(x - used.x) < Math.max(clampedWidth, used.w) + 4
+        const overlapY = Math.abs(y - used.y) < Math.max(clampedHeight, used.h) + 4
         if (overlapX && overlapY) {
           // Shift along the edge
-          if (y <= padding + 1 || y >= height - padding - boxSize.h - 1) {
+          if (y <= padding + 1 || y >= height - padding - clampedHeight - 1) {
             // On top/bottom edge, shift horizontally
-            x += boxSize.w + 4
-            if (x > width - padding - boxSize.w) x = padding
+            x += clampedWidth + 4
+            if (x > width - padding - clampedWidth) x = padding
           } else {
             // On left/right edge, shift vertically
-            y += boxSize.h + 4
-            if (y > height - padding - boxSize.h) y = padding
+            y += clampedHeight + 4
+            if (y > height - padding - clampedHeight) y = padding
           }
         }
       }
 
-      usedPositions.push({ x, y })
+      usedPositions.push({ x, y, w: clampedWidth, h: clampedHeight })
 
-      // Create a projection for this inset using the same scale as main map
-      // but clamped so tiny islands aren't invisible and huge territories aren't enormous
-      const insetCenter = geoCentroid(inset)
+      // Add padding inside the inset box
+      const contentPadding = 4
+      const contentWidth = clampedWidth - contentPadding * 2
+      const contentHeight = clampedHeight - contentPadding * 2
 
-      // First, create a projection at the main scale to see how big this territory would be
-      const testProjection = geoAzimuthalEqualArea()
-        .rotate([-insetCenter[0], -insetCenter[1]])
-        .scale(projectionScale)
-        .translate([0, 0])
-
-      // Calculate bounds at main scale
-      const testPath = geoPath(testProjection)
-      const bounds = testPath.bounds(inset)
-      const naturalWidth = bounds[1][0] - bounds[0][0]
-      const naturalHeight = bounds[1][1] - bounds[0][1]
-
-      // Define min/max box sizes
-      const minBoxSize = 30
-      const maxBoxSize = 80
-
-      // Calculate what box size we'd need at main scale
-      const paddingInset = 4
-      const neededWidth = naturalWidth + paddingInset * 2
-      const neededHeight = naturalHeight + paddingInset * 2
-
-      // Clamp the box size
-      const clampedWidth = Math.max(minBoxSize, Math.min(maxBoxSize, neededWidth))
-      const clampedHeight = Math.max(minBoxSize, Math.min(maxBoxSize, neededHeight))
-
-      // Calculate scale adjustment if we had to clamp
-      const scaleX = (clampedWidth - paddingInset * 2) / naturalWidth
-      const scaleY = (clampedHeight - paddingInset * 2) / naturalHeight
+      // Calculate scale adjustment to fit content within padded area
+      const scaleX = contentWidth / naturalWidth
+      const scaleY = contentHeight / naturalHeight
       const scaleFactor = Math.min(scaleX, scaleY)
 
-      // Create final projection with adjusted scale
+      // Create final projection with proper centering
       const finalScale = projectionScale * scaleFactor
       const insetProjection = geoAzimuthalEqualArea()
-        .rotate([-insetCenter[0], -insetCenter[1]])
+        .rotate([-groupCenter[0], -groupCenter[1]])
         .scale(finalScale)
-        .translate([clampedWidth / 2, clampedHeight / 2])
+        .translate([0, 0])
+
+      // Calculate bounds and center the territory in the padded content area
+      const projBounds = geoPath(insetProjection).bounds(combinedFeature)
+      const boundsWidth = projBounds[1][0] - projBounds[0][0]
+      const boundsHeight = projBounds[1][1] - projBounds[0][1]
+      const offsetX = contentPadding + (contentWidth - boundsWidth) / 2 - projBounds[0][0]
+      const offsetY = contentPadding + (contentHeight - boundsHeight) / 2 - projBounds[0][1]
+      insetProjection.translate([offsetX, offsetY])
 
       const insetPath = geoPath(insetProjection)
-      const d = insetPath(inset) || ''
+      // Generate paths for all polygons in the group
+      const paths = group.map(poly => insetPath(poly) || '').filter(d => d)
 
       // Track which edges touch the SVG border (for stroke rendering)
-      const touchesLeft = x <= 0
-      const touchesTop = y <= 0
-      const touchesRight = x + clampedWidth >= width
-      const touchesBottom = y + clampedHeight >= height
+      // Use small tolerance for floating-point precision
+      const touchesLeft = x <= 1
+      const touchesTop = y <= 1
+      const touchesRight = x + clampedWidth >= width - 1
+      const touchesBottom = y + clampedHeight >= height - 1
 
-      return { x, y, w: clampedWidth, h: clampedHeight, d, key: `inset-${index}`, touchesLeft, touchesTop, touchesRight, touchesBottom }
+      return { x, y, w: clampedWidth, h: clampedHeight, paths, key: `inset-${index}`, touchesLeft, touchesTop, touchesRight, touchesBottom }
     })
   }, [polygonParts, projection, projectionScale, width, height, mode, showInsets])
 
@@ -555,8 +664,16 @@ function CountryMapInner({
     )
   }
 
-  // Toggle insets on click (only if there are insets)
-  const handleClick = hasInsets ? () => setShowInsetsState(prev => !prev) : undefined
+  // Toggle zoom on click
+  const handleClick = canToggleZoom
+    ? () => {
+        if (hasInsets) {
+          setShowInsetsState(prev => !prev)
+        } else {
+          setZoomedOutForContext(prev => !prev)
+        }
+      }
+    : undefined
 
   return (
     <svg
@@ -566,7 +683,7 @@ function CountryMapInner({
         borderRadius: '8px',
         width: '100%',
         height: '100%',
-        cursor: hasInsets ? 'pointer' : 'default'
+        cursor: canToggleZoom ? 'pointer' : 'default'
       }}
       preserveAspectRatio="xMidYMid meet"
       onClick={handleClick}
@@ -603,7 +720,7 @@ function CountryMapInner({
       </defs>
 
       {/* Render inset boxes for overseas territories */}
-      {insetBoxes.map(({ x, y, w, h, d, key, touchesLeft, touchesTop, touchesRight, touchesBottom }) => {
+      {insetBoxes.map(({ x, y, w, h, paths, key, touchesLeft, touchesTop, touchesRight, touchesBottom }) => {
         // Build stroke path only for edges that don't touch the SVG border
         const strokeSegments: string[] = []
         if (!touchesTop) strokeSegments.push(`M0,0 L${w},0`)
@@ -619,12 +736,15 @@ function CountryMapInner({
               height={h}
               fill="#1a3a5c"
             />
-            {/* Territory shape - clipped to box */}
-            <path
-              d={d}
-              clipPath={`url(#clip-${key})`}
-              fill="#4ade80"
-            />
+            {/* Territory shapes - clipped to box */}
+            {paths.map((d, i) => (
+              <path
+                key={i}
+                d={d}
+                clipPath={`url(#clip-${key})`}
+                fill="#4ade80"
+              />
+            ))}
             {/* Stroke only on non-edge sides */}
             {strokeSegments.length > 0 && (
               <path
@@ -638,8 +758,8 @@ function CountryMapInner({
         )
       })}
 
-      {/* Hint text for toggling insets (only in quiz mode, not overview) */}
-      {hasInsets && mode !== 'overview' && (
+      {/* Hint text for toggling zoom (only in quiz mode, not overview) */}
+      {canToggleZoom && mode !== 'overview' && (
         <text
           x={width - 6}
           y={height - 6}
@@ -648,7 +768,10 @@ function CountryMapInner({
           fontSize="10"
           style={{ pointerEvents: 'none' }}
         >
-          {showInsets ? 'Klikk for å zoome ut' : 'Klikk for å zoome inn'}
+          {hasInsets
+            ? (showInsets ? 'Klikk for å zoome ut' : 'Klikk for å zoome inn')
+            : (zoomedOutForContext ? 'Klikk for å zoome inn' : 'Klikk for å zoome ut')
+          }
         </text>
       )}
     </svg>
