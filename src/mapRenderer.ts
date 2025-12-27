@@ -255,9 +255,9 @@ export function renderMapToSVG(
   const height = options.height * scaleFactor
 
   const extraZoom = countriesNeedingExtraZoom[country] || 1.0
-  // Overview mode: 0.7 shows country with neighbors visible around edges
+  // Overview mode: 0.85 fits country with some context
   // Quiz mode: 0.5 shows more context for guessing
-  const baseZoomFactor = mode === 'overview' ? 0.7 * extraZoom : 0.5 * extraZoom
+  const baseZoomFactor = mode === 'overview' ? 0.85 * extraZoom : 0.5 * extraZoom
   const paddingPx = (mode === 'overview' ? 4 : 10) * scaleFactor
 
   const polygonParts = getPolygonParts(targetFeature)

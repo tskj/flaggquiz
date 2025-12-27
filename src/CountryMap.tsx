@@ -1,234 +1,17 @@
 import { useEffect, useState, useMemo, memo } from 'react'
-import { geoPath, geoAzimuthalEqualArea, geoCentroid, geoBounds, geoArea } from 'd3-geo'
+import { geoPath, geoAzimuthalEqualArea, geoCentroid, geoArea } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { Topology, GeometryCollection } from 'topojson-specification'
-import type { FeatureCollection, Feature, Geometry, Polygon } from 'geojson'
+import type { FeatureCollection, Feature, Geometry } from 'geojson'
 import { countryToISO } from './countryISOCodes'
-
-interface PolygonParts {
-  mainForProjection: Feature<Polygon>  // Largest polygon (possibly clipped), used for projection bounds
-  mainForRendering: Feature<Polygon>   // Original largest polygon for rendering
-  nearbyPolygons: Feature<Polygon>[]   // All polygons to render in main view (includes main + nearby islands)
-  tinyDistantIslands: Feature<Polygon>[] // Small distant islands rendered in main view without insets
-  insets: Feature<Polygon>[]           // Distant territories for inset boxes (flat list)
-  insetGroups: Feature<Polygon>[][]    // Distant territories grouped by proximity (for rendering)
-  spansDateLine: boolean               // Whether the country spans the date line
-}
-
-// Clip a polygon to only include coordinates in the eastern part (for projection calculation)
-function clipToEasternHemisphere(poly: Feature<Polygon>): Feature<Polygon> {
-  const coords = poly.geometry.coordinates[0]
-
-  // Filter to only keep coordinates with lng > 0 (eastern hemisphere)
-  const clippedCoords = coords.filter(point => point[0] > 0)
-
-  if (clippedCoords.length < 4) {
-    // Not enough points, return original
-    return poly
-  }
-
-  // Close the polygon if needed
-  const first = clippedCoords[0]
-  const last = clippedCoords[clippedCoords.length - 1]
-  if (first[0] !== last[0] || first[1] !== last[1]) {
-    clippedCoords.push([...first] as [number, number])
-  }
-
-  return {
-    type: 'Feature',
-    properties: poly.properties,
-    geometry: {
-      type: 'Polygon',
-      coordinates: [clippedCoords]
-    }
-  }
-}
-
-// Group nearby polygons together (for island archipelagos like Svalbard)
-function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][] {
-  if (polygons.length === 0) return []
-  if (polygons.length === 1) return [polygons]
-
-  // Calculate bounds for each polygon
-  const polygonsWithBounds = polygons.map(p => ({
-    poly: p,
-    bounds: geoBounds(p),
-    centroid: geoCentroid(p)
-  }))
-
-  // Group polygons that are within 8 degrees of each other (keeps archipelagos like Svalbard together)
-  const groups: Feature<Polygon>[][] = []
-  const used = new Set<number>()
-
-  for (let i = 0; i < polygonsWithBounds.length; i++) {
-    if (used.has(i)) continue
-
-    const group: Feature<Polygon>[] = [polygonsWithBounds[i].poly]
-    used.add(i)
-
-    // Find all polygons close to any polygon in the current group
-    let foundMore = true
-    while (foundMore) {
-      foundMore = false
-      for (let j = 0; j < polygonsWithBounds.length; j++) {
-        if (used.has(j)) continue
-
-        const b = polygonsWithBounds[j]
-
-        // Check if this polygon is within 8 degrees of ANY polygon in the group
-        for (const groupPoly of group) {
-          const a = polygonsWithBounds.find(p => p.poly === groupPoly)!
-          const dist = Math.sqrt(
-            Math.pow(a.centroid[0] - b.centroid[0], 2) +
-            Math.pow(a.centroid[1] - b.centroid[1], 2)
-          )
-
-          if (dist < 8) {
-            group.push(b.poly)
-            used.add(j)
-            foundMore = true
-            break
-          }
-        }
-      }
-    }
-
-    groups.push(group)
-  }
-
-  return groups
-}
-
-// Extract polygons into: main (for projection), nearby (for main view), and insets (for boxes)
-function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
-  const geom = feat.geometry
-  if (geom.type === 'Polygon') {
-    const poly = feat as Feature<Polygon>
-    // Filter out corrupted polygons (area > 1 steradian is bogus data)
-    if (geoArea(poly) > 1) {
-      return {
-        mainForProjection: poly,
-        mainForRendering: poly,
-        nearbyPolygons: [],
-        tinyDistantIslands: [],
-        insets: [],
-        insetGroups: [],
-        spansDateLine: false
-      }
-    }
-    return {
-      mainForProjection: poly,
-      mainForRendering: poly,
-      nearbyPolygons: [poly],
-      tinyDistantIslands: [],
-      insets: [],
-      insetGroups: [],
-      spansDateLine: false
-    }
-  }
-  if (geom.type === 'MultiPolygon') {
-    // Filter out corrupted polygons (area > 1 steradian is bogus data covering hemispheres)
-    // Strip inner rings (holes) for Kazakhstan - the Aral Sea hole looks weird
-    const isKazakhstan = (feat as CountryFeature).id === '398'
-    const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates
-      .map(coords => {
-        const poly: Feature<Polygon> = {
-          type: 'Feature',
-          properties: feat.properties,
-          geometry: { type: 'Polygon', coordinates: isKazakhstan ? [coords[0]] : coords }
-        }
-        return { poly, area: geoArea(poly) }
-      })
-      .filter(({ area }) => area < 1) // Remove bogus hemisphere-covering polygons
-
-    // Sort by area descending
-    polygons.sort((a, b) => b.area - a.area)
-
-    const mainForRendering = polygons[0].poly
-    let mainForProjection = mainForRendering
-    const mainArea = polygons[0].area
-
-    // Check if main polygon spans the date line and clip if needed
-    const mainCoords = mainForRendering.geometry.coordinates[0]
-    const lngs = mainCoords.map(p => p[0])
-    const minLng = Math.min(...lngs)
-    const maxLng = Math.max(...lngs)
-    const crossesDateLine = minLng < -90 && maxLng > 90
-
-    if (crossesDateLine) {
-      // For date-line-spanning countries, clip to eastern hemisphere for projection
-      mainForProjection = clipToEasternHemisphere(mainForRendering)
-    }
-
-    // Add moderate padding to main bounds (5° in each direction)
-    // This keeps coastal islands with mainland, but separates distant territories like Svalbard
-    const mainBounds = geoBounds(mainForProjection)
-    const paddedBounds = {
-      minLng: mainBounds[0][0] - 5,
-      minLat: mainBounds[0][1] - 5,
-      maxLng: mainBounds[1][0] + 5,
-      maxLat: mainBounds[1][1] + 5,
-    }
-
-    const nearbyPolygons: Feature<Polygon>[] = [mainForRendering]
-    const tinyDistantIslands: Feature<Polygon>[] = []
-    const insets: Feature<Polygon>[] = []
-
-    const mainLng = geoCentroid(mainForProjection)[0]
-
-    for (let i = 1; i < polygons.length; i++) {
-      const { poly, area } = polygons[i]
-
-      // Check if polygon crosses the date line (opposite hemisphere from main)
-      const polyLng = geoCentroid(poly)[0]
-      const polySpansDateLine = (mainLng > 0 && polyLng < -90) || (mainLng < 0 && polyLng > 90)
-
-      if (polySpansDateLine) {
-        // Include far-east territories - they'll be rendered with rotation
-        nearbyPolygons.push(poly)
-        continue
-      }
-
-      const bounds = geoBounds(poly)
-
-      // Check if polygon is completely outside the padded main bounds
-      const isDistant =
-        bounds[1][0] < paddedBounds.minLng || // Entirely west of padded main
-        bounds[0][0] > paddedBounds.maxLng || // Entirely east of padded main
-        bounds[1][1] < paddedBounds.minLat || // Entirely south of padded main
-        bounds[0][1] > paddedBounds.maxLat    // Entirely north of padded main
-
-      if (isDistant) {
-        // Significant distant territories (>= 0.1% of main) get inset boxes
-        // Tiny distant islands (< 0.1% but >= 0.02%) are rendered in main view as dots
-        if (area >= mainArea * 0.001) {
-          insets.push(poly)
-        } else if (area >= mainArea * 0.0002) {
-          tinyDistantIslands.push(poly)
-        }
-      } else {
-        // Nearby - include in main view rendering
-        nearbyPolygons.push(poly)
-      }
-    }
-
-    // Group nearby inset polygons together (e.g., Svalbard islands)
-    const insetGroups = groupNearbyPolygons(insets)
-
-    return { mainForProjection, mainForRendering, nearbyPolygons, tinyDistantIslands, insets, insetGroups, spansDateLine: crossesDateLine }
-  }
-  // Fallback
-  const poly = feat as Feature<Polygon>
-  return {
-    mainForProjection: poly,
-    mainForRendering: poly,
-    nearbyPolygons: [poly],
-    tinyDistantIslands: [],
-    insets: [],
-    insetGroups: [],
-    spansDateLine: false
-  }
-}
+import {
+  getPolygonParts,
+  countriesWithoutInsets,
+  countriesNeedingExtraZoom,
+  OCEAN_COLOR,
+  NEIGHBOR_COLOR,
+  COUNTRY_COLOR,
+} from './mapRenderer'
 
 // TopoJSON from world-atlas
 const TOPOJSON_URL_50M = 'https://unpkg.com/world-atlas@2.0.2/countries-50m.json'
@@ -273,18 +56,6 @@ interface CountryFeature extends Feature<Geometry> {
   properties: { name: string }
 }
 
-// Countries where insets don't make sense - just show everything in the main view
-const countriesWithoutInsets = ['Bahamas', 'Canada', 'Denmark', 'Solomon Islands', 'Marshall Islands', 'Kiribati']
-
-// Small island nations that need extra zoom (spread out but tiny land area)
-const countriesNeedingExtraZoom: Record<string, number> = {
-  'Palau': 3.0,
-  'Kiribati': 6.0,
-  'Tuvalu': 4.0,
-  'Marshall Islands': 4.0,
-  'Maldives': 5.0,
-}
-
 // Fixed global zoom level for "see where in the world" view
 const GLOBAL_CONTEXT_ZOOM = 150
 
@@ -299,7 +70,7 @@ function CountryMapInner({
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview fits country to box
   const extraZoom = countriesNeedingExtraZoom[highlightedCountry] || 1.0
-  const baseZoomFactor = mode === 'overview' ? 1.0 * extraZoom : 0.5 * extraZoom
+  const baseZoomFactor = mode === 'overview' ? 0.85 * extraZoom : 0.5 * extraZoom
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
@@ -707,7 +478,7 @@ function CountryMapInner({
   // Early returns after all hooks
   if (loading) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: OCEAN_COLOR }}>
         <span style={{ color: '#666' }}>Laster kart...</span>
       </div>
     )
@@ -715,7 +486,7 @@ function CountryMapInner({
 
   if (error || !countries50m || !countries10m) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: OCEAN_COLOR }}>
         <span style={{ color: '#f66' }}>{error || 'Kunne ikke laste kart'}</span>
       </div>
     )
@@ -723,7 +494,7 @@ function CountryMapInner({
 
   if ((!targetFeature50m && !targetFeature10m) || !pathGenerator) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: OCEAN_COLOR }}>
         <span style={{ color: '#888' }}>Kart ikke tilgjengelig</span>
       </div>
     )
@@ -745,7 +516,7 @@ function CountryMapInner({
     <svg
       viewBox={`0 0 ${width} ${height}`}
       style={{
-        background: '#1a3a5c',
+        background: OCEAN_COLOR,
         width: '100%',
         height: '100%',
         cursor: canToggleZoom ? 'pointer' : 'default'
@@ -754,15 +525,15 @@ function CountryMapInner({
       onClick={handleClick}
     >
       {/* Ocean background */}
-      <rect width={width} height={height} fill="#1a3a5c" />
+      <rect width={width} height={height} fill={OCEAN_COLOR} />
 
       {/* Render non-target countries first (50m) */}
       {neighborPaths.map(({ key, d }) => (
         <path
           key={key}
           d={d}
-          fill="#2d2d44"
-          stroke="#1a3a5c"
+          fill={NEIGHBOR_COLOR}
+          stroke={OCEAN_COLOR}
           strokeWidth={strokeWidth}
         />
       ))}
@@ -771,7 +542,7 @@ function CountryMapInner({
         <path
           key={key}
           d={d}
-          fill="#4ade80"
+          fill={COUNTRY_COLOR}
         />
       ))}
 
@@ -809,7 +580,7 @@ function CountryMapInner({
             <rect
               width={w}
               height={h}
-              fill="#1a3a5c"
+              fill={OCEAN_COLOR}
             />
             {/* Territory shapes - clipped to box */}
             {paths.map((d, i) => (
@@ -817,14 +588,14 @@ function CountryMapInner({
                 key={i}
                 d={d}
                 clipPath={`url(#clip-${key})`}
-                fill="#4ade80"
+                fill={COUNTRY_COLOR}
               />
             ))}
             {/* Stroke only on non-edge sides */}
             {strokeSegments.length > 0 && (
               <path
                 d={strokeSegments.join(' ')}
-                stroke="#4ade80"
+                stroke={COUNTRY_COLOR}
                 strokeWidth={1}
                 fill="none"
               />

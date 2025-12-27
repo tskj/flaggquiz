@@ -1403,13 +1403,13 @@ export default function App() {
           /* Kids map quiz: Map + country name as question */
           <div className="w-full max-w-4xl w-[95vw] mb-10 sm:mb-14">
             <div className="aspect-video mb-2 rounded-lg overflow-hidden">
-              <CountryMap highlightedCountry={currentCountry} width={672} height={378} />
+              <PrerenderedCountryMap highlightedCountry={currentCountry} width={672} height={378} mode="quiz" />
             </div>
             <p className="text-white text-xl sm:text-2xl font-bold text-center">{correctAnswer}</p>
           </div>
         ) : isMapQuiz(quizType) ? (
           <div className="w-full max-w-4xl w-[95vw] aspect-video mb-2 sm:mb-4 rounded-lg overflow-hidden">
-            <CountryMap highlightedCountry={currentCountry} width={672} height={378} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
+            <PrerenderedCountryMap highlightedCountry={currentCountry} width={672} height={378} mode="quiz" allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
           </div>
         ) : (
           <div className={`w-full max-w-4xl w-[95vw] rounded-lg overflow-hidden ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}>
