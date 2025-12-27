@@ -266,8 +266,25 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 // Get 4 options (1 correct + 3 distractors) in random order
-export function getQuizOptions(correctCountry: string): string[] {
-  const distractors = getRandomDistractors(correctCountry)
+// For European countries, uses curated distractors; for others, picks randomly
+export function getQuizOptions(correctCountry: string, allCountries?: string[]): string[] {
+  let distractors: string[]
+
+  if (allCountries) {
+    // Random distractors from the provided country list
+    distractors = getRandomDistractorsFromList(correctCountry, allCountries)
+  } else {
+    // Use curated European distractors
+    distractors = getRandomDistractors(correctCountry)
+  }
+
   const options = [correctCountry, ...distractors]
   return shuffleArray(options)
+}
+
+// Get random distractors from a list of countries
+export function getRandomDistractorsFromList(correctCountry: string, allCountries: string[]): string[] {
+  const available = allCountries.filter(c => c !== correctCountry)
+  const shuffled = shuffleArray(available)
+  return shuffled.slice(0, 3)
 }

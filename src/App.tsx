@@ -371,12 +371,10 @@ export default function App() {
   }
 
   const getQuizTypeName = (type: QuizType): string => {
-    if (isKidsFlagQuiz(type)) {
-      return 'Europeiske flagg'
-    }
-    if (isKidsMapQuiz(type)) {
-      return 'Europeiske land'
-    }
+    if (type === 'kids-europe') return 'Europas flagg'
+    if (type === 'kids-map-europe') return 'Europas land'
+    if (type === 'kids-world') return 'Verdens flagg'
+    if (type === 'kids-map-world') return 'Verdens land'
     const baseType = getBaseQuizType(type)
     const prefix = isMapQuiz(type) ? 'Kart: ' : ''
     switch (baseType) {
@@ -567,22 +565,28 @@ export default function App() {
   const startQuiz = (type: QuizType = 'world') => {
     clearActiveSession()
     const isKids = isKidsQuiz(type)
-    // For kids quizzes, use European countries (filter out Kosovo for map quiz)
+    // For kids quizzes, determine country list based on type
     let allCountries: string[]
-    if (isKidsFlagQuiz(type)) {
+    if (type === 'kids-europe') {
       allCountries = europeanCountries.filter(c => c in countryFlags)
-    } else if (isKidsMapQuiz(type)) {
+    } else if (type === 'kids-map-europe') {
       allCountries = europeanCountries.filter(c => c in countryFlags && !countriesWithoutMapData.includes(c))
+    } else if (type === 'kids-world') {
+      allCountries = Object.keys(countryFlags)
+    } else if (type === 'kids-map-world') {
+      allCountries = Object.keys(countryFlags).filter(c => !countriesWithoutMapData.includes(c))
     } else {
       allCountries = getCountriesForType(type)
     }
     const shuffled = shuffleArray(allCountries)
     const newSessionId = Date.now().toString()
-    const defaultTime = isKids ? 15 * 60 : getDefaultTime(type)  // 15 min for kids (generous)
+    // Kids mode times: Europe 10 min, World 35 min
+    const kidsTime = (type === 'kids-europe' || type === 'kids-map-europe') ? 10 * 60 : 35 * 60
+    const defaultTime = isKids ? kidsTime : getDefaultTime(type)
     setSessionId(newSessionId)
     setQuizType(type)
     setKidsMode(isKids)
-    setPracticeMode(false)  // Kids mode is NOT practice mode - we track highscores
+    // Keep practiceMode from checkbox (don't override)
     setCurrentQueue(shuffled)
     setQuizOrder(shuffled)
     setCurrentIndex(0)
@@ -598,8 +602,16 @@ export default function App() {
     setSelectedOption(null)
     // Generate options for first question in kids mode
     if (isKids && shuffled.length > 0) {
-      setCurrentOptions(getQuizOptions(shuffled[0]))
+      // For world quizzes, pass the full country list for random distractors
+      const useRandomDistractors = type === 'kids-world' || type === 'kids-map-world'
+      setCurrentOptions(getQuizOptions(shuffled[0], useRandomDistractors ? allCountries : undefined))
     }
+  }
+
+  // Helper to get quiz options with correct distractor source
+  const getOptionsForCountry = (country: string) => {
+    const useRandomDistractors = quizType === 'kids-world' || quizType === 'kids-map-world'
+    return getQuizOptions(country, useRandomDistractors ? quizOrder : undefined)
   }
 
   const currentCountry = currentQueue[currentIndex]
@@ -710,7 +722,7 @@ export default function App() {
       setCurrentIndex(currentIndex + 1)
       // Generate new options for kids mode
       if (kidsMode) {
-        setCurrentOptions(getQuizOptions(nextFlag))
+        setCurrentOptions(getOptionsForCountry(nextFlag))
         setSelectedOption(null)
       }
     } else {
@@ -724,7 +736,7 @@ export default function App() {
         setSeenFlags(prev => new Set(prev).add(remainingIncorrect[0]))
         // Generate new options for kids mode
         if (kidsMode) {
-          setCurrentOptions(getQuizOptions(remainingIncorrect[0]))
+          setCurrentOptions(getOptionsForCountry(remainingIncorrect[0]))
           setSelectedOption(null)
         }
       } else {
@@ -760,7 +772,7 @@ export default function App() {
         } else {
           // Get next flag and options BEFORE updating state
           const nextFlag = currentQueue[currentIndex + 1]
-          const nextOptions = getQuizOptions(nextFlag)
+          const nextOptions = getOptionsForCountry(nextFlag)
           // Update all state together
           setCurrentIndex(currentIndex + 1)
           setCurrentOptions(nextOptions)
@@ -779,7 +791,7 @@ export default function App() {
         // Get next flag and options BEFORE updating state
         if (currentIndex + 1 < currentQueue.length) {
           const nextFlag = currentQueue[currentIndex + 1]
-          const nextOptions = getQuizOptions(nextFlag)
+          const nextOptions = getOptionsForCountry(nextFlag)
           // Update all state together
           setCurrentIndex(currentIndex + 1)
           setCurrentOptions(nextOptions)
@@ -792,7 +804,7 @@ export default function App() {
           const remainingIncorrect = quizOrder.filter(f => !correctFlags.has(f))
           if (remainingIncorrect.length > 0) {
             const nextFlag = remainingIncorrect[0]
-            const nextOptions = getQuizOptions(nextFlag)
+            const nextOptions = getOptionsForCountry(nextFlag)
             setCurrentQueue(remainingIncorrect)
             setCurrentIndex(0)
             setCurrentOptions(nextOptions)
@@ -890,36 +902,7 @@ export default function App() {
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
-        <h1 className="text-white text-3xl font-bold mb-6 text-center">Flaggquiz</h1>
-
-        {/* Kids mode section */}
-        <h2 className="text-gray-400 text-sm mb-2">For alle</h2>
-        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
-          <button
-            onClick={() => startQuiz('kids-europe')}
-            className="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
-          >
-            {highScores['kids-europe'] && (
-              <span className={`absolute top-1 right-2 text-xs font-normal ${highScores['kids-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
-                ⭐ {highScores['kids-europe'].correct}/{highScores['kids-europe'].total}
-              </span>
-            )}
-            Europas flagg
-            <span className="block text-sm font-normal opacity-90">{europeanCountries.length} land - 15 min</span>
-          </button>
-          <button
-            onClick={() => startQuiz('kids-map-europe')}
-            className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
-          >
-            {highScores['kids-map-europe'] && (
-              <span className={`absolute top-1 right-2 text-xs font-normal ${highScores['kids-map-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
-                ⭐ {highScores['kids-map-europe'].correct}/{highScores['kids-map-europe'].total}
-              </span>
-            )}
-            Europas land
-            <span className="block text-sm font-normal opacity-90">{getQuizCount('kids-map-europe')} land - 15 min</span>
-          </button>
-        </div>
+        <h1 className="text-white text-3xl font-bold mb-6 text-center">Alle Verdens Land</h1>
 
         <label className="flex items-center gap-3 mb-6 cursor-pointer">
           <input
@@ -931,6 +914,61 @@ export default function App() {
           <span className="text-gray-300">Øvemodus</span>
           <span className="text-gray-500 text-sm">(ingen tidtaking eller highscore)</span>
         </label>
+
+        {/* Kids mode section */}
+        <h2 className="text-gray-400 text-sm mb-2">For alle</h2>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-4">
+          <button
+            onClick={() => startQuiz('kids-europe')}
+            className="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['kids-europe'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['kids-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['kids-europe'].correct}/{highScores['kids-europe'].total}
+              </span>
+            )}
+            Europas flagg
+            <span className="block text-sm font-normal opacity-90">{europeanCountries.length} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 10 min</span></span>
+          </button>
+          <button
+            onClick={() => startQuiz('kids-map-europe')}
+            className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['kids-map-europe'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['kids-map-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['kids-map-europe'].correct}/{highScores['kids-map-europe'].total}
+              </span>
+            )}
+            Europas land
+            <span className="block text-sm font-normal opacity-90">{getQuizCount('kids-map-europe')} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 10 min</span></span>
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
+          <button
+            onClick={() => startQuiz('kids-world')}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['kids-world'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['kids-world'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['kids-world'].correct}/{highScores['kids-world'].total}
+              </span>
+            )}
+            Verdens flagg
+            <span className="block text-sm font-normal opacity-90">{Object.keys(countryFlags).length} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 35 min</span></span>
+          </button>
+          <button
+            onClick={() => startQuiz('kids-map-world')}
+            className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['kids-map-world'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['kids-map-world'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['kids-map-world'].correct}/{highScores['kids-map-world'].total}
+              </span>
+            )}
+            Verdens land
+            <span className="block text-sm font-normal opacity-90">{getQuizCount('kids-map-world')} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 35 min</span></span>
+          </button>
+        </div>
 
         <h2 className="text-gray-400 text-sm mb-2">Flagg</h2>
         <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
