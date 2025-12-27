@@ -128,12 +128,14 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
   }
   if (geom.type === 'MultiPolygon') {
     // Filter out corrupted polygons (area > 1 steradian is bogus data covering hemispheres)
+    // Strip inner rings (holes) for Kazakhstan - the Aral Sea hole looks weird
+    const isKazakhstan = (feat as CountryFeature).id === '398'
     const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates
       .map(coords => {
         const poly: Feature<Polygon> = {
           type: 'Feature',
           properties: feat.properties,
-          geometry: { type: 'Polygon', coordinates: coords }
+          geometry: { type: 'Polygon', coordinates: isKazakhstan ? [coords[0]] : coords }
         }
         return { poly, area: geoArea(poly) }
       })
