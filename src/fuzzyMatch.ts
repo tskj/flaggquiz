@@ -4,6 +4,18 @@ const SUB_COST = 3
 const STREAK_BIAS = 3
 const SWAP_COST = 2  // Cost for transposing adjacent characters
 
+// Normalize strings for comparison - handles common variations
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')           // Decompose accented chars (é -> e + combining accent)
+    .replace(/[\u0300-\u036f]/g, '') // Remove combining diacritical marks
+    .replace(/ og /g, '-')      // "Bosnia og Hercegovina" -> "Bosnia-Hercegovina"
+    .replace(/ and /g, '-')     // English "and"
+    .replace(/[\s-]+/g, '')     // Remove all spaces and hyphens for comparison
+}
+
 // Pre-process to handle adjacent transpositions (Damerau-Levenshtein style)
 function handleTranspositions(query: string, target: string): string {
   const t = target.toLowerCase()
@@ -119,15 +131,23 @@ export function isCloseEnough(input: string, answer: string): boolean {
     return false
   }
 
-  const distance = fuzzyMatch(normalizedInput, normalizedAnswer)
+  // Try normalized comparison first (handles "Bosnia og Hercegovina" vs "Bosnia-Hercegovina")
+  const normInput = normalize(input)
+  const normAnswer = normalize(answer)
+  if (normInput === normAnswer) {
+    return true
+  }
+
+  // Use normalized versions for fuzzy matching too
+  const distance = fuzzyMatch(normInput, normAnswer)
 
   // Base threshold: stricter for short words, more lenient for longer ones
-  let maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 4)
+  let maxAllowedDistance = Math.floor(4 + Math.pow(normAnswer.length, 1.3) / 4)
 
   // More lenient for same-length words (handles typos like Columbia->Colombia)
-  const lengthDiff = Math.abs(normalizedInput.length - normalizedAnswer.length)
-  if (lengthDiff <= 1 && normalizedAnswer.length >= 6) {
-    maxAllowedDistance = Math.floor(4 + Math.pow(normalizedAnswer.length, 1.3) / 2.5)
+  const lengthDiff = Math.abs(normInput.length - normAnswer.length)
+  if (lengthDiff <= 1 && normAnswer.length >= 6) {
+    maxAllowedDistance = Math.floor(4 + Math.pow(normAnswer.length, 1.3) / 2.5)
   }
 
   return distance <= maxAllowedDistance

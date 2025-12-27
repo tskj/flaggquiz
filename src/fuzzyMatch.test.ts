@@ -28,6 +28,16 @@ describe("checkAnswer", () => {
       expect(checkAnswer("Columbia", "Colombia", allNorwegianNames)).toEqual(["match", "Colombia"]);
     });
 
+    it("accepts 'Bosnia og Hercegovina' for 'Bosnia-Hercegovina'", () => {
+      expect(checkAnswer("Bosnia og Hercegovina", "Bosnia-Hercegovina", allNorwegianNames)).toEqual(["match", "Bosnia-Hercegovina"]);
+    });
+
+    it("accepts typing without accents/diacritics", () => {
+      expect(checkAnswer("Sao Tome og Principe", "São Tomé og Príncipe", allNorwegianNames)).toEqual(["match", "São Tomé og Príncipe"]);
+      expect(checkAnswer("Ost-Timor", "Øst-Timor", allNorwegianNames)).toEqual(["match", "Øst-Timor"]);
+      expect(checkAnswer("Osterrike", "Østerrike", allNorwegianNames)).toEqual(["match", "Østerrike"]);
+    });
+
     it("returns match for fuzzy alternative name", () => {
       expect(checkAnswer("Amerik", "De forente stater", allNorwegianNames, ["Amerika"])).toEqual(["match", "Amerika"]);
       expect(checkAnswer("Bruma", "Myanmar", allNorwegianNames, ["Burma"])).toEqual(["match", "Burma"]);
@@ -321,8 +331,11 @@ describe("confusable country pairs", () => {
       expect(checkAnswer("sørkorea", "Sør-Korea", allNorwegianNames)).toEqual(["match", "Sør-Korea"]);
     });
 
-    it("korea alone is too short", () => {
-      expect(checkAnswer("korea", "Nord-Korea", allNorwegianNames)).toEqual(["no_match"]);
+    it("korea alone is ambiguous between Nord-Korea and Sør-Korea", () => {
+      const result = checkAnswer("korea", "Nord-Korea", allNorwegianNames);
+      expect(result[0]).toBe("ambiguous");
+      expect(result[1]).toContain("Nord-Korea");
+      expect(result[1]).toContain("Sør-Korea");
     });
   });
 
