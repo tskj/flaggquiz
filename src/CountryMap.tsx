@@ -11,6 +11,7 @@ import {
   OCEAN_COLOR,
   NEIGHBOR_COLOR,
   COUNTRY_COLOR,
+  GLOBAL_CONTEXT_ZOOM,
 } from './mapRenderer'
 
 // TopoJSON from world-atlas
@@ -55,9 +56,6 @@ interface CountryFeature extends Feature<Geometry> {
   id?: string
   properties: { name: string }
 }
-
-// Fixed global zoom level for "see where in the world" view
-const GLOBAL_CONTEXT_ZOOM = 150
 
 function CountryMapInner({
   highlightedCountry,

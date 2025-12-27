@@ -577,5 +577,79 @@ export function renderMapToSVG(
   }
 }
 
+/**
+ * Project capital coordinates to screen position for a given country map
+ * Returns null if projection fails or coordinates are off-screen
+ */
+export function projectCapitalToScreen(
+  country: string,
+  targetFeature: Feature<Geometry>,
+  capitalCoords: [number, number],
+  options: RenderMapOptions
+): { x: number; y: number; radius: number } | null {
+  const { mode, variant = 'default', scaleFactor = 1 } = options
+  const width = options.width * scaleFactor
+  const height = options.height * scaleFactor
+
+  const polygonParts = getPolygonParts(targetFeature)
+  if (!polygonParts) return null
+
+  const forceNoInsets = countriesWithoutInsets.includes(country)
+  const hasInsets = !forceNoInsets && polygonParts.insets.length > 0
+  const showInsets = mode === 'quiz' && variant === 'default' && hasInsets
+  const useGlobalZoom = mode === 'quiz' && variant === 'zoomed-out' && !hasInsets
+
+  const extraZoom = countriesNeedingExtraZoom[country] || 1.0
+  const baseZoomFactor = mode === 'overview' ? 0.85 * extraZoom : 0.5 * extraZoom
+  const paddingPx = (mode === 'overview' ? 4 : 10) * scaleFactor
+
+  const mainArea = geoArea(polygonParts.nearbyPolygons[0])
+  const allPolygons = showInsets || mode === 'overview'
+    ? polygonParts.nearbyPolygons
+    : [...polygonParts.nearbyPolygons, ...polygonParts.insets]
+
+  const significantPolygons = showInsets || mode === 'overview'
+    ? allPolygons.filter(p => geoArea(p) >= mainArea * 0.01)
+    : allPolygons
+
+  const significantFeature: Feature<Geometry> = {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: significantPolygons.map(p => p.geometry.coordinates)
+    }
+  }
+
+  const centerFeature = extraZoom > 1 ? polygonParts.mainForProjection : significantFeature
+  const center = geoCentroid(centerFeature)
+
+  const projection = geoAzimuthalEqualArea()
+    .rotate([-center[0], -center[1]])
+    .fitExtent(
+      [[paddingPx, paddingPx], [width - paddingPx, height - paddingPx]],
+      significantFeature
+    )
+
+  const currentScale = projection.scale()
+  const finalScale = useGlobalZoom ? GLOBAL_CONTEXT_ZOOM * scaleFactor : currentScale * baseZoomFactor
+  projection.scale(finalScale)
+  projection.translate([width / 2, height / 2])
+
+  const projected = projection(capitalCoords)
+  if (!projected) return null
+
+  // Check if point is within visible area
+  if (projected[0] < -10 || projected[0] > width + 10 ||
+      projected[1] < -10 || projected[1] > height + 10) {
+    return null
+  }
+
+  // Calculate radius based on scale (smaller when zoomed out)
+  const radius = Math.max(2, Math.min(4, 3 * (finalScale / 1500))) * scaleFactor
+
+  return { x: projected[0], y: projected[1], radius }
+}
+
 // Re-export d3-geo functions for use by CountryMap
 export { geoPath, geoAzimuthalEqualArea, geoCentroid, geoBounds, geoArea }
