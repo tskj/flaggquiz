@@ -322,10 +322,21 @@ function CountryMapInner({
   )
 
   // Split country into main polygon and distant insets (overseas territories)
+  // Use 10m data when available for more accurate bounds (important for island nations like Maldives)
   const polygonParts = useMemo(() => {
+    // Prefer 10m data for polygon parts - it's more accurate for island nations
+    if (targetFeature10m) {
+      const bounds = geoBounds(targetFeature10m)
+      const lngSpan = bounds[1][0] - bounds[0][0]
+      const latSpan = bounds[1][1] - bounds[0][1]
+      // Use 10m if it has meaningful extent
+      if (lngSpan > 0.001 && latSpan > 0.001) {
+        return getPolygonParts(targetFeature10m)
+      }
+    }
     if (!targetFeature50m) return null
     return getPolygonParts(targetFeature50m)
-  }, [targetFeature50m])
+  }, [targetFeature50m, targetFeature10m])
 
   // Check if this country has insets
   const hasInsets = !forceNoInsets && polygonParts?.insets && polygonParts.insets.length > 0
@@ -408,32 +419,18 @@ function CountryMapInner({
   const targetPaths = useMemo(() => {
     if (!pathGenerator || !polygonParts) return []
 
-    // Determine if we should use 10m data
-    let use10m = false
-    let parts10m: PolygonParts | null = null
-    if (targetFeature10m) {
-      const bounds = geoBounds(targetFeature10m)
-      const lngSpan = bounds[1][0] - bounds[0][0]
-      const latSpan = bounds[1][1] - bounds[0][1]
-      // Only use 10m if it has meaningful extent (> 0.001 degrees in both dimensions)
-      if (lngSpan > 0.001 && latSpan > 0.001) {
-        use10m = true
-        parts10m = getPolygonParts(targetFeature10m)
-      }
-    }
-
     // Render all nearby polygons (mainland + nearby islands like Lofoten)
     // Always render tiny distant islands (they appear as dots, don't get insets)
     // When insets are hidden, also render the inset polygons in the main view
-    const baseParts = use10m && parts10m ? parts10m : polygonParts
+    // Note: polygonParts already uses 10m data when available
     const polygonsToRender = showInsets
-      ? [...baseParts.nearbyPolygons, ...baseParts.tinyDistantIslands]
-      : [...baseParts.nearbyPolygons, ...baseParts.tinyDistantIslands, ...baseParts.insets]
+      ? [...polygonParts.nearbyPolygons, ...polygonParts.tinyDistantIslands]
+      : [...polygonParts.nearbyPolygons, ...polygonParts.tinyDistantIslands, ...polygonParts.insets]
 
     return polygonsToRender
       .map((poly, i) => ({ key: `target-${i}`, d: pathGenerator(poly) || '' }))
       .filter(p => p.d)
-  }, [pathGenerator, targetFeature10m, polygonParts, showInsets])
+  }, [pathGenerator, polygonParts, showInsets])
 
   // Calculate inset boxes for overseas territories (only in quiz mode, and only when showInsets is true)
   const insetBoxes = useMemo(() => {
