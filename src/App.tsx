@@ -1144,14 +1144,14 @@ export default function App() {
               const isCorrectOption = option === currentCountry
               const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
 
-              let borderClass = 'border-4 border-gray-500 hover:border-gray-300'
+              let borderClass = ''
               if (justAnswered) {
                 if (isSelected && isCorrectOption) {
-                  borderClass = 'border-4 border-green-400'
+                  borderClass = 'ring-4 ring-green-400'
                 } else if (isSelected && !isCorrectOption) {
-                  borderClass = 'border-4 border-red-400'
+                  borderClass = 'ring-4 ring-red-400'
                 } else if (wasWrongAnswer && isCorrectOption) {
-                  borderClass = 'border-4 border-green-400'
+                  borderClass = 'ring-4 ring-green-400'
                 }
               }
 
@@ -1160,7 +1160,7 @@ export default function App() {
                   key={option}
                   onClick={() => handleKidsOptionClick(option)}
                   disabled={justAnswered}
-                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 bg-gray-700 p-2`}
+                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 p-1`}
                 >
                   <img
                     src={optionFlagUrl}
