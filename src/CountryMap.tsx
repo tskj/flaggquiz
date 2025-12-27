@@ -1,24 +1,58 @@
 import { useEffect, useState, useMemo, memo } from 'react'
-import { geoPath, geoMercator, geoCentroid, geoBounds, geoArea } from 'd3-geo'
+import { geoPath, geoAzimuthalEqualArea, geoCentroid, geoBounds, geoArea } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { Topology, GeometryCollection } from 'topojson-specification'
 import type { FeatureCollection, Feature, Geometry, Polygon } from 'geojson'
 import { countryToISO } from './countryISOCodes'
 
 interface PolygonParts {
-  mainForProjection: Feature<Polygon>  // Largest polygon, used for projection bounds
+  mainForProjection: Feature<Polygon>  // Largest polygon (possibly clipped), used for projection bounds
+  mainForRendering: Feature<Polygon>   // Original largest polygon for rendering
   nearbyPolygons: Feature<Polygon>[]   // All polygons to render in main view (includes main + nearby islands)
   insets: Feature<Polygon>[]           // Distant territories for inset boxes
+  spansDateLine: boolean               // Whether the country spans the date line
+}
+
+// Clip a polygon to only include coordinates in the eastern part (for projection calculation)
+function clipToEasternHemisphere(poly: Feature<Polygon>): Feature<Polygon> {
+  const coords = poly.geometry.coordinates[0]
+
+  // Filter to only keep coordinates with lng > 0 (eastern hemisphere)
+  const clippedCoords = coords.filter(point => point[0] > 0)
+
+  if (clippedCoords.length < 4) {
+    // Not enough points, return original
+    return poly
+  }
+
+  // Close the polygon if needed
+  const first = clippedCoords[0]
+  const last = clippedCoords[clippedCoords.length - 1]
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    clippedCoords.push([...first] as [number, number])
+  }
+
+  return {
+    type: 'Feature',
+    properties: poly.properties,
+    geometry: {
+      type: 'Polygon',
+      coordinates: [clippedCoords]
+    }
+  }
 }
 
 // Extract polygons into: main (for projection), nearby (for main view), and insets (for boxes)
 function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
   const geom = feat.geometry
   if (geom.type === 'Polygon') {
+    const poly = feat as Feature<Polygon>
     return {
-      mainForProjection: feat as Feature<Polygon>,
-      nearbyPolygons: [feat as Feature<Polygon>],
-      insets: []
+      mainForProjection: poly,
+      mainForRendering: poly,
+      nearbyPolygons: [poly],
+      insets: [],
+      spansDateLine: false
     }
   }
   if (geom.type === 'MultiPolygon') {
@@ -35,8 +69,21 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
     // Sort by area descending
     polygons.sort((a, b) => b.area - a.area)
 
-    const mainForProjection = polygons[0].poly
+    const mainForRendering = polygons[0].poly
+    let mainForProjection = mainForRendering
     const mainArea = polygons[0].area
+
+    // Check if main polygon spans the date line and clip if needed
+    const mainCoords = mainForRendering.geometry.coordinates[0]
+    const lngs = mainCoords.map(p => p[0])
+    const minLng = Math.min(...lngs)
+    const maxLng = Math.max(...lngs)
+    const crossesDateLine = minLng < -90 && maxLng > 90
+
+    if (crossesDateLine) {
+      // For date-line-spanning countries, clip to eastern hemisphere for projection
+      mainForProjection = clipToEasternHemisphere(mainForRendering)
+    }
 
     // Add moderate padding to main bounds (3° in each direction)
     // This keeps nearby islands like Lofoten with mainland, but separates truly distant territories
@@ -48,11 +95,24 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
       maxLat: mainBounds[1][1] + 3,
     }
 
-    const nearbyPolygons: Feature<Polygon>[] = [mainForProjection]
+    const nearbyPolygons: Feature<Polygon>[] = [mainForRendering]
     const insets: Feature<Polygon>[] = []
+
+    const mainLng = geoCentroid(mainForProjection)[0]
 
     for (let i = 1; i < polygons.length; i++) {
       const { poly, area } = polygons[i]
+
+      // Check if polygon crosses the date line (opposite hemisphere from main)
+      const polyLng = geoCentroid(poly)[0]
+      const polySpansDateLine = (mainLng > 0 && polyLng < -90) || (mainLng < 0 && polyLng > 90)
+
+      if (polySpansDateLine) {
+        // Include far-east territories - they'll be rendered with rotation
+        nearbyPolygons.push(poly)
+        continue
+      }
+
       const bounds = geoBounds(poly)
 
       // Check if polygon is completely outside the padded main bounds
@@ -73,13 +133,16 @@ function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
       }
     }
 
-    return { mainForProjection, nearbyPolygons, insets }
+    return { mainForProjection, mainForRendering, nearbyPolygons, insets, spansDateLine: crossesDateLine }
   }
   // Fallback
+  const poly = feat as Feature<Polygon>
   return {
-    mainForProjection: feat as Feature<Polygon>,
-    nearbyPolygons: [feat as Feature<Polygon>],
-    insets: []
+    mainForProjection: poly,
+    mainForRendering: poly,
+    nearbyPolygons: [poly],
+    insets: [],
+    spansDateLine: false
   }
 }
 
@@ -179,19 +242,23 @@ function CountryMapInner({
   const { pathGenerator, projectionScale } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000 }
 
-    // Use largest polygon for projection (handles countries with overseas territories)
+    // Get the center of the country (use mainForProjection which is clipped for date-line countries)
     const center = geoCentroid(polygonParts.mainForProjection)
     const paddingPx = 20
-    const projection = geoMercator()
+
+    // Use Azimuthal Equal-Area projection centered on the country
+    // This gives accurate shapes and sizes, especially for polar countries
+    // and automatically handles date-line crossing
+    const projection = geoAzimuthalEqualArea()
+      .rotate([-center[0], -center[1]])  // Center on the country
       .fitExtent(
         [[paddingPx, paddingPx], [width - paddingPx, height - paddingPx]],
-        polygonParts.mainForProjection
+        polygonParts.mainForRendering
       )
 
     const currentScale = projection.scale()
     const finalScale = currentScale * zoomFactor
     projection.scale(finalScale)
-    projection.center(center)
     projection.translate([width / 2, height / 2])
 
     return { pathGenerator: geoPath(projection), projectionScale: finalScale }
@@ -229,7 +296,9 @@ function CountryMapInner({
     }
 
     // Render all nearby polygons (mainland + nearby islands like Lofoten)
+    // The rotated projection handles date-line crossing automatically
     const polygonsToRender = use10m && parts10m ? parts10m.nearbyPolygons : polygonParts.nearbyPolygons
+
     return polygonsToRender
       .map((poly, i) => ({ key: `target-${i}`, d: pathGenerator(poly) || '' }))
       .filter(p => p.d)
@@ -318,8 +387,10 @@ function CountryMapInner({
           break
       }
 
-      // Create a projection for this inset
-      const insetProjection = geoMercator()
+      // Create a projection for this inset, centered on the territory
+      const insetCenter = geoCentroid(inset)
+      const insetProjection = geoAzimuthalEqualArea()
+        .rotate([-insetCenter[0], -insetCenter[1]])
         .fitExtent(
           [[2, 2], [boxSize.w - 2, boxSize.h - 2]],
           inset
