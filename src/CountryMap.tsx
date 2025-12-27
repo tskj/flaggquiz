@@ -56,7 +56,7 @@ function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][]
     centroid: geoCentroid(p)
   }))
 
-  // Group polygons that are within 10 degrees of each other (for archipelagos like Svalbard)
+  // Group polygons that are within 3 degrees of each other (keeps archipelagos together but separates distant islands)
   const groups: Feature<Polygon>[][] = []
   const used = new Set<number>()
 
@@ -83,7 +83,7 @@ function groupNearbyPolygons(polygons: Feature<Polygon>[]): Feature<Polygon>[][]
             Math.pow(a.centroid[1] - b.centroid[1], 2)
           )
 
-          if (dist < 10) {
+          if (dist < 3) {
             group.push(b.poly)
             used.add(j)
             foundMore = true
@@ -257,7 +257,15 @@ interface CountryFeature extends Feature<Geometry> {
 }
 
 // Countries where insets don't make sense - just show everything in the main view
-const countriesWithoutInsets = ['Bahamas', 'Canada', 'Denmark']
+const countriesWithoutInsets = ['Bahamas', 'Canada', 'Denmark', 'Solomon Islands', 'Marshall Islands', 'Kiribati']
+
+// Small island nations that need extra zoom (spread out but tiny land area)
+const countriesNeedingExtraZoom: Record<string, number> = {
+  'Palau': 3.0,
+  'Kiribati': 6.0,
+  'Tuvalu': 4.0,
+  'Marshall Islands': 4.0,
+}
 
 // Fixed global zoom level for "see where in the world" view
 const GLOBAL_CONTEXT_ZOOM = 150
@@ -271,7 +279,8 @@ function CountryMapInner({
   onMapClick,
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview fits country to box
-  const baseZoomFactor = mode === 'overview' ? 1.0 : 0.5
+  const extraZoom = countriesNeedingExtraZoom[highlightedCountry] || 1.0
+  const baseZoomFactor = mode === 'overview' ? 1.0 * extraZoom : 0.5 * extraZoom
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
@@ -393,8 +402,10 @@ function CountryMapInner({
       }
     }
 
-    // Center on significant parts (fixes Greece, Malta, etc. where islands are close but off-center)
-    const center = geoCentroid(significantFeature)
+    // When extra zoom is applied, center on just the main polygon to avoid being pulled off-center
+    // by smaller nearby islands (fixes Kiribati where Kiritimati should be centered)
+    const centerFeature = extraZoom > 1 ? polygonParts.mainForProjection : significantFeature
+    const center = geoCentroid(centerFeature)
 
     // Use Azimuthal Equal-Area projection centered on the country
     // This gives accurate shapes and sizes, especially for polar countries
@@ -413,7 +424,7 @@ function CountryMapInner({
     proj.translate([width / 2, height / 2])
 
     return { pathGenerator: geoPath(proj), projectionScale: finalScale, projection: proj }
-  }, [polygonParts, width, height, zoomFactor, showInsets, useGlobalZoom, mode])
+  }, [polygonParts, width, height, zoomFactor, showInsets, useGlobalZoom, mode, extraZoom])
 
   const neighborPaths = useMemo(() => {
     if (!countries50m || !pathGenerator) return []
@@ -493,34 +504,52 @@ function CountryMapInner({
         dy /= length
       }
 
-      // Create a projection for this group using the same scale as main map
-      // but clamped so tiny islands aren't invisible and huge territories aren't enormous
+      // Create a projection for this group
       const groupCenter = groupCentroid
-
-      // First, create a projection at the main scale to see how big this group would be
-      const testProjection = geoAzimuthalEqualArea()
-        .rotate([-groupCenter[0], -groupCenter[1]])
-        .scale(projectionScale)
-        .translate([0, 0])
-
-      // Calculate bounds at main scale for the whole group
-      const testPath = geoPath(testProjection)
-      const bounds = testPath.bounds(combinedFeature)
-      const naturalWidth = bounds[1][0] - bounds[0][0]
-      const naturalHeight = bounds[1][1] - bounds[0][1]
 
       // Define min/max box sizes
       const minBoxSize = 30
       const maxBoxSize = 80
+      const contentPadding = 4
 
-      // Clamp the box size
-      const clampedWidth = Math.max(minBoxSize, Math.min(maxBoxSize, naturalWidth))
-      const clampedHeight = Math.max(minBoxSize, Math.min(maxBoxSize, naturalHeight))
+      // Create a projection fitted to the inset content area to measure natural size
+      const testProjection = geoAzimuthalEqualArea()
+        .rotate([-groupCenter[0], -groupCenter[1]])
+        .fitSize([maxBoxSize - contentPadding * 2, maxBoxSize - contentPadding * 2], combinedFeature)
+
+      // Calculate bounds to determine aspect ratio
+      const testPath = geoPath(testProjection)
+      const bounds = testPath.bounds(combinedFeature)
+      const naturalWidth = Math.max(1, bounds[1][0] - bounds[0][0])
+      const naturalHeight = Math.max(1, bounds[1][1] - bounds[0][1])
+
+      // Get the fitted scale and check if it needs capping
+      const fitScale = testProjection.scale()
+      const maxScale = projectionScale * 2
+      const scaleCapped = fitScale > maxScale
+      const finalScale = Math.min(fitScale, maxScale)
+
+      // Calculate base box size based on aspect ratio
+      let boxWidth: number, boxHeight: number
+      if (naturalWidth > naturalHeight) {
+        boxWidth = Math.max(minBoxSize, Math.min(maxBoxSize, naturalWidth + contentPadding * 2))
+        boxHeight = Math.max(minBoxSize, boxWidth * (naturalHeight / naturalWidth))
+      } else {
+        boxHeight = Math.max(minBoxSize, Math.min(maxBoxSize, naturalHeight + contentPadding * 2))
+        boxWidth = Math.max(minBoxSize, boxHeight * (naturalWidth / naturalHeight))
+      }
+
+      // If scale was capped, shrink box proportionally so island fills the smaller box
+      if (scaleCapped) {
+        const shrinkRatio = maxScale / fitScale
+        boxWidth = Math.max(minBoxSize, boxWidth * shrinkRatio)
+        boxHeight = Math.max(minBoxSize, boxHeight * shrinkRatio)
+      }
 
       // Calculate position along the edge of the screen
       const centerX = width / 2
       const centerY = height / 2
-      const edgePadding = padding + clampedWidth / 2
+      const edgePadding = padding + boxWidth / 2
 
       let x: number, y: number
 
@@ -536,32 +565,32 @@ function CountryMapInner({
         if (dx < 0) {
           const t = (edgePadding - centerX) / dx
           const iy = centerY + t * dy
-          if (iy >= padding && iy <= height - padding - clampedHeight) {
-            intersections.push({ x: padding, y: iy - clampedHeight / 2, t: Math.abs(t) })
+          if (iy >= padding && iy <= height - padding - boxHeight) {
+            intersections.push({ x: padding, y: iy - boxHeight / 2, t: Math.abs(t) })
           }
         }
         // Right edge
         if (dx > 0) {
           const t = (width - edgePadding - centerX) / dx
           const iy = centerY + t * dy
-          if (iy >= padding && iy <= height - padding - clampedHeight) {
-            intersections.push({ x: width - padding - clampedWidth, y: iy - clampedHeight / 2, t: Math.abs(t) })
+          if (iy >= padding && iy <= height - padding - boxHeight) {
+            intersections.push({ x: width - padding - boxWidth, y: iy - boxHeight / 2, t: Math.abs(t) })
           }
         }
         // Top edge
         if (dy < 0) {
           const t = (edgePadding - centerY) / dy
           const ix = centerX + t * dx
-          if (ix >= padding && ix <= width - padding - clampedWidth) {
-            intersections.push({ x: ix - clampedWidth / 2, y: padding, t: Math.abs(t) })
+          if (ix >= padding && ix <= width - padding - boxWidth) {
+            intersections.push({ x: ix - boxWidth / 2, y: padding, t: Math.abs(t) })
           }
         }
         // Bottom edge
         if (dy > 0) {
           const t = (height - edgePadding - centerY) / dy
           const ix = centerX + t * dx
-          if (ix >= padding && ix <= width - padding - clampedWidth) {
-            intersections.push({ x: ix - clampedWidth / 2, y: height - padding - clampedHeight, t: Math.abs(t) })
+          if (ix >= padding && ix <= width - padding - boxWidth) {
+            intersections.push({ x: ix - boxWidth / 2, y: height - padding - boxHeight, t: Math.abs(t) })
           }
         }
 
@@ -571,59 +600,39 @@ function CountryMapInner({
           const pos = intersections[0]
 
           // Clamp to valid range
-          x = Math.max(padding, Math.min(width - padding - clampedWidth, pos.x))
-          y = Math.max(padding, Math.min(height - padding - clampedHeight, pos.y))
+          x = Math.max(padding, Math.min(width - padding - boxWidth, pos.x))
+          y = Math.max(padding, Math.min(height - padding - boxHeight, pos.y))
         } else {
           // Fallback to corner based on direction
-          x = dx < 0 ? padding : width - padding - clampedWidth
-          y = dy < 0 ? padding : height - padding - clampedHeight
+          x = dx < 0 ? padding : width - padding - boxWidth
+          y = dy < 0 ? padding : height - padding - boxHeight
         }
       }
 
       // Avoid overlap with previous insets
       for (const used of usedPositions) {
-        const overlapX = Math.abs(x - used.x) < Math.max(clampedWidth, used.w) + 4
-        const overlapY = Math.abs(y - used.y) < Math.max(clampedHeight, used.h) + 4
+        const overlapX = Math.abs(x - used.x) < Math.max(boxWidth, used.w) + 4
+        const overlapY = Math.abs(y - used.y) < Math.max(boxHeight, used.h) + 4
         if (overlapX && overlapY) {
           // Shift along the edge
-          if (y <= padding + 1 || y >= height - padding - clampedHeight - 1) {
+          if (y <= padding + 1 || y >= height - padding - boxHeight - 1) {
             // On top/bottom edge, shift horizontally
-            x += clampedWidth + 4
-            if (x > width - padding - clampedWidth) x = padding
+            x += boxWidth + 4
+            if (x > width - padding - boxWidth) x = padding
           } else {
             // On left/right edge, shift vertically
-            y += clampedHeight + 4
-            if (y > height - padding - clampedHeight) y = padding
+            y += boxHeight + 4
+            if (y > height - padding - boxHeight) y = padding
           }
         }
       }
 
-      usedPositions.push({ x, y, w: clampedWidth, h: clampedHeight })
+      usedPositions.push({ x, y, w: boxWidth, h: boxHeight })
 
-      // Add padding inside the inset box
-      const contentPadding = 4
-      const contentWidth = clampedWidth - contentPadding * 2
-      const contentHeight = clampedHeight - contentPadding * 2
-
-      // Calculate scale adjustment to fit content within padded area
-      const scaleX = contentWidth / naturalWidth
-      const scaleY = contentHeight / naturalHeight
-      const scaleFactor = Math.min(scaleX, scaleY)
-
-      // Create final projection with proper centering
-      const finalScale = projectionScale * scaleFactor
       const insetProjection = geoAzimuthalEqualArea()
         .rotate([-groupCenter[0], -groupCenter[1]])
         .scale(finalScale)
-        .translate([0, 0])
-
-      // Calculate bounds and center the territory in the padded content area
-      const projBounds = geoPath(insetProjection).bounds(combinedFeature)
-      const boundsWidth = projBounds[1][0] - projBounds[0][0]
-      const boundsHeight = projBounds[1][1] - projBounds[0][1]
-      const offsetX = contentPadding + (contentWidth - boundsWidth) / 2 - projBounds[0][0]
-      const offsetY = contentPadding + (contentHeight - boundsHeight) / 2 - projBounds[0][1]
-      insetProjection.translate([offsetX, offsetY])
+        .translate([boxWidth / 2, boxHeight / 2])
 
       const insetPath = geoPath(insetProjection)
       // Generate paths for all polygons in the group
@@ -633,10 +642,10 @@ function CountryMapInner({
       // Use small tolerance for floating-point precision
       const touchesLeft = x <= 1
       const touchesTop = y <= 1
-      const touchesRight = x + clampedWidth >= width - 1
-      const touchesBottom = y + clampedHeight >= height - 1
+      const touchesRight = x + boxWidth >= width - 1
+      const touchesBottom = y + boxHeight >= height - 1
 
-      return { x, y, w: clampedWidth, h: clampedHeight, paths, key: `inset-${index}`, touchesLeft, touchesTop, touchesRight, touchesBottom }
+      return { x, y, w: boxWidth, h: boxHeight, paths, key: `inset-${index}`, touchesLeft, touchesTop, touchesRight, touchesBottom }
     })
   }, [polygonParts, projection, projectionScale, width, height, mode, showInsets])
 
