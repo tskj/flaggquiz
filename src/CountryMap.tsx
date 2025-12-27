@@ -249,6 +249,7 @@ interface CountryMapProps {
   mode?: 'quiz' | 'overview' // quiz = show neighbors, overview = zoomed in on country
   allowZoomToggle?: boolean // Whether clicking toggles zoom (enabled in practice mode)
   onMapClick?: () => void // Called after map click (e.g., to refocus input)
+  capitalCoords?: [number, number] // [longitude, latitude] to show a red dot marker
 }
 
 interface CountryFeature extends Feature<Geometry> {
@@ -277,6 +278,7 @@ function CountryMapInner({
   mode = 'quiz',
   allowZoomToggle = true,
   onMapClick,
+  capitalCoords,
 }: CountryMapProps) {
   // Quiz mode shows neighbors (zoom out), overview fits country to box
   const extraZoom = countriesNeedingExtraZoom[highlightedCountry] || 1.0
@@ -688,6 +690,19 @@ function CountryMapInner({
     return Math.max(0.8, Math.min(baseStroke, baseStroke * (projectionScale / referenceScale)))
   }, [mode, projectionScale])
 
+  // Project capital coordinates to screen position
+  const capitalScreenPos = useMemo(() => {
+    if (!capitalCoords || !projection) return null
+    const projected = projection(capitalCoords)
+    if (!projected) return null
+    // Check if the point is within the visible area (with some margin)
+    if (projected[0] < -10 || projected[0] > width + 10 ||
+        projected[1] < -10 || projected[1] > height + 10) {
+      return null
+    }
+    return projected
+  }, [capitalCoords, projection, width, height])
+
   // Early returns after all hooks
   if (loading) {
     return (
@@ -759,6 +774,16 @@ function CountryMapInner({
           fill="#4ade80"
         />
       ))}
+
+      {/* Capital marker (red dot) */}
+      {capitalScreenPos && (
+        <circle
+          cx={capitalScreenPos[0]}
+          cy={capitalScreenPos[1]}
+          r={3}
+          fill="#ef4444"
+        />
+      )}
 
       {/* Define clip paths for inset boxes */}
       <defs>

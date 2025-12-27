@@ -5,7 +5,7 @@ import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
 import { CountryMap, preloadMapData } from './CountryMap'
 import { getQuizOptions } from './kidsQuizData'
-import { europeanCapitals, getCapitalAlternatives } from './europeanCapitals'
+import { europeanCapitals, getCapitalAlternatives, capitalCoordinates } from './europeanCapitals'
 
 // Start preloading map data immediately
 preloadMapData()
@@ -357,13 +357,16 @@ export default function App() {
   // Countries without map data in world-atlas (filtered out for map quizzes)
   const countriesWithoutMapData = ['Kosovo']
 
+  // Countries where capital name = country name (trivial for capital quiz)
+  const countriesWithSameCapital = ['Luxembourg', 'Monaco', 'San Marino', 'Vatican City']
+
   const getQuizCount = (type: QuizType): number => {
-    // Capital quizzes - filter out countries without map data for choice quiz
+    // Capital quizzes - filter out countries without map data and trivial same-name capitals
     if (type === 'capital-input-europe') {
-      return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c)).length
+      return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c) && !countriesWithSameCapital.includes(c)).length
     }
     if (type === 'capital-choice-europe') {
-      return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c)).length
+      return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c) && !countriesWithSameCapital.includes(c)).length
     }
     const baseType = getBaseQuizType(type)
     const mapFilter = isMapQuiz(type) ? countriesWithoutMapData.length : 0
@@ -385,7 +388,7 @@ export default function App() {
     if (type === 'kids-world') return 'Verdens flagg'
     if (type === 'kids-map-world') return 'Verdens land'
     if (type === 'capital-input-europe') return 'Hovedsteder (skriv)'
-    if (type === 'capital-choice-europe') return 'Hovedsteder (velg)'
+    if (type === 'capital-choice-europe') return 'Hovedsteder (flervalg)'
     const baseType = getBaseQuizType(type)
     const prefix = isMapQuiz(type) ? 'Kart: ' : ''
     switch (baseType) {
@@ -597,8 +600,8 @@ export default function App() {
     } else if (type === 'kids-map-world') {
       allCountries = Object.keys(countryFlags).filter(c => !countriesWithoutMapData.includes(c))
     } else if (isCapital) {
-      // Capital quizzes - European countries with capitals, excluding Kosovo for map display
-      allCountries = europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c))
+      // Capital quizzes - European countries with capitals, excluding Kosovo and trivial same-name capitals
+      allCountries = europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c) && !countriesWithSameCapital.includes(c))
     } else {
       allCountries = getCountriesForType(type)
     }
@@ -1135,7 +1138,7 @@ export default function App() {
                 ⭐ {highScores['capital-choice-europe'].correct}/{highScores['capital-choice-europe'].total}
               </span>
             )}
-            Europas Hovedsteder (velg)
+            Europas Hovedsteder (flervalg)
             <span className="block text-sm font-normal opacity-90">{getQuizCount('capital-choice-europe')} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 5 min</span></span>
           </button>
         </div>
@@ -1347,7 +1350,7 @@ export default function App() {
           /* Capital input quiz: Map with flag overlay + country name as question */
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
             <div className="relative aspect-video mb-3">
-              <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
+              <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
               <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg bg-gray-800">
                 <img
                   src={flagUrl}
