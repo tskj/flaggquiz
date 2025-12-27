@@ -1,13 +1,16 @@
 import { z } from 'zod'
 
-// Quiz types - flag quizzes and map quizzes
+// Quiz types - flag quizzes, map quizzes, and kids quizzes
 export type QuizType =
   | 'world' | 'europe' | 'africa' | 'asia' | 'north-america' | 'south-america' | 'oceania' | 'territories'
   | 'map-world' | 'map-europe' | 'map-africa' | 'map-asia' | 'map-north-america' | 'map-south-america' | 'map-oceania' | 'map-territories'
+  | 'kids-europe'
 
 export const isMapQuiz = (type: QuizType): boolean => type.startsWith('map-')
+export const isKidsQuiz = (type: QuizType): boolean => type.startsWith('kids-')
 export const getBaseQuizType = (type: QuizType): QuizType =>
-  type.startsWith('map-') ? type.replace('map-', '') as QuizType : type
+  type.startsWith('map-') ? type.replace('map-', '') as QuizType :
+  type.startsWith('kids-') ? type.replace('kids-', '') as QuizType : type
 
 // Schema for a single quiz session
 export const QuizSessionSchema = z.object({
@@ -18,7 +21,8 @@ export const QuizSessionSchema = z.object({
   timeRemaining: z.number(),
   quizType: z.enum([
     'world', 'europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania', 'territories',
-    'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania', 'map-territories'
+    'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania', 'map-territories',
+    'kids-europe'
   ]).default('world'),
 
   // Quiz configuration
@@ -38,6 +42,10 @@ export const QuizSessionSchema = z.object({
   currentAttempts: z.array(z.string()),
   pendingWrongMatch: z.string().nullable(),
   input: z.string(),
+
+  // Kids mode
+  kidsMode: z.boolean().optional().default(false),
+  currentOptions: z.array(z.string()).optional().default([]),
 })
 
 export type QuizSession = z.infer<typeof QuizSessionSchema>
@@ -124,6 +132,7 @@ export function getHighScores(): Record<QuizType, HighScore | null> {
     'map-south-america': null,
     'map-oceania': null,
     'map-territories': null,
+    'kids-europe': null,
   }
 
   for (const session of history.sessions) {
