@@ -328,11 +328,13 @@ function CountryMapInner({
   // Split country into main polygon and distant insets (overseas territories)
   // Use 10m data for quiz mode (more accurate for island nations like Maldives)
   // Use 50m data for overview/thumbnail mode (simpler, better for small displays)
+  // Fallback to 10m if country only exists there (e.g., Tuvalu)
   const polygonParts = useMemo(() => {
-    // For overview mode (thumbnails), use simpler 50m data
+    // For overview mode (thumbnails), prefer simpler 50m data but fallback to 10m
     if (mode === 'overview') {
-      if (!targetFeature50m) return null
-      return getPolygonParts(targetFeature50m)
+      if (targetFeature50m) return getPolygonParts(targetFeature50m)
+      if (targetFeature10m) return getPolygonParts(targetFeature10m)
+      return null
     }
     // For quiz mode, prefer 10m data - it's more accurate for island nations
     if (targetFeature10m) {
@@ -664,7 +666,7 @@ function CountryMapInner({
     )
   }
 
-  if (!targetFeature50m || !pathGenerator) {
+  if ((!targetFeature50m && !targetFeature10m) || !pathGenerator) {
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c', borderRadius: '8px' }}>
         <span style={{ color: '#888' }}>Kart ikke tilgjengelig</span>

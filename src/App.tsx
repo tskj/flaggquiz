@@ -324,7 +324,7 @@ export default function App() {
   const [quizOrder, setQuizOrder] = useState<string[]>([])
   const [correctFlags, setCorrectFlags] = useState<Set<string>>(new Set())
   const [seenFlags, setSeenFlags] = useState<Set<string>>(new Set())  // All flags ever shown (only grows)
-  const [showAllResults, setShowAllResults] = useState(false)
+  const [resultsTab, setResultsTab] = useState<'wrong' | 'practice' | 'all' | null>(null)
   const [struggledFlags, setStruggledFlags] = useState<Map<string, string[]>>(new Map())
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
   const [pendingWrongMatch, setPendingWrongMatch] = useState<string | null>(null)
@@ -566,7 +566,7 @@ export default function App() {
     setQuizFinished(false)
     setCorrectFlags(new Set())
     setSeenFlags(new Set([shuffled[0]]))  // First flag is immediately seen
-    setShowAllResults(false)
+    setResultsTab(null)
     setStruggledFlags(new Map())
     setCurrentAttempts([])
     setInput('')
@@ -586,16 +586,26 @@ export default function App() {
     if (justAnswered) return
     if (matchesCorrectAnswer(value)) {
       setJustAnswered(true)
-      setCorrectFlags(prev => new Set(prev).add(currentCountry))
+      const newCorrectFlags = new Set(correctFlags).add(currentCountry)
+      setCorrectFlags(newCorrectFlags)
       // If we had attempts before getting it right, mark as struggled
       if (currentAttempts.length > 0) {
         setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts]))
       }
       setCurrentAttempts([])
       setPendingWrongMatch(null)
+
+      // Check if this was the last flag (use newCorrectFlags to avoid stale closure)
+      const isLastFlag = currentIndex + 1 >= currentQueue.length &&
+        quizOrder.every(f => newCorrectFlags.has(f))
+
       setTimeout(() => {
         setJustAnswered(false)
-        moveToNext(false)
+        if (isLastFlag) {
+          setQuizFinished(true)
+        } else {
+          moveToNext(false)
+        }
       }, 400)
     } else {
       // Check if input is a strict match for any other country (for tracking wrong attempts)
@@ -796,13 +806,23 @@ export default function App() {
     // Unreached = flags that were never shown to the user (not in seenFlags)
     const unreachedFlags = new Set(quizOrder.filter(f => !seenFlags.has(f)))
 
-    const failedFlags = quizOrder.filter(country => !correctFlags.has(country) && !unreachedFlags.has(country))
-    const struggledOnly = quizOrder.filter(country => correctFlags.has(country) && struggledFlags.has(country))
-    // Show failed, struggled, and unreached flags in quiz order
-    const problemFlags = quizOrder.filter(country =>
+    // Wrong = failed + unreached (actually wrong/unanswered)
+    const wrongFlags = quizOrder.filter(country => !correctFlags.has(country))
+    // Practice = wrong + struggled (for learning)
+    const practiceFlags = quizOrder.filter(country =>
       !correctFlags.has(country) || struggledFlags.has(country)
     )
-    const displayFlags = showAllResults ? quizOrder : problemFlags
+
+    // Default tab: if got less than 30% right, show "all" to avoid cluttered wrong view
+    const defaultTab: 'wrong' | 'practice' | 'all' = correctFlags.size < totalFlags * 0.3 ? 'all' : 'practice'
+    // Use user selection if set, otherwise use computed default
+    const activeTab = resultsTab ?? defaultTab
+
+    // Select which flags to display based on active tab
+    const displayFlags = activeTab === 'all' ? quizOrder
+      : activeTab === 'wrong' ? wrongFlags
+      : practiceFlags
+
     const quizTypeName = getQuizTypeName(quizType)
 
     return (
@@ -833,14 +853,20 @@ export default function App() {
 
         <div className="flex justify-center mb-4">
           <button
-            onClick={() => setShowAllResults(false)}
-            className={`px-4 py-2 rounded-l-lg ${!showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+            onClick={() => setResultsTab('wrong')}
+            className={`px-4 py-2 rounded-l-lg ${activeTab === 'wrong' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
           >
-            Feil ({failedFlags.length + unreachedFlags.size}){struggledOnly.length > 0 && ` + ${struggledOnly.length} slitt`}
+            Feil ({wrongFlags.length})
           </button>
           <button
-            onClick={() => setShowAllResults(true)}
-            className={`px-4 py-2 rounded-r-lg ${showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+            onClick={() => setResultsTab('practice')}
+            className={`px-4 py-2 ${activeTab === 'practice' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
+          >
+            Øve på ({practiceFlags.length})
+          </button>
+          <button
+            onClick={() => setResultsTab('all')}
+            className={`px-4 py-2 rounded-r-lg ${activeTab === 'all' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
           >
             Alle ({totalFlags})
           </button>
@@ -929,14 +955,14 @@ export default function App() {
                 (() => {
                   const totalIncorrect = quizOrder.filter(f => !correctFlags.has(f)).length
                   return (
-                    <span className={totalIncorrect === 1 ? 'text-yellow-400 font-bold' : 'text-yellow-500'}>
+                    <span className={totalIncorrect === 1 ? 'text-gray-400' : 'text-yellow-500'}>
                       {totalIncorrect === 1 ? 'Siste!' : `${totalIncorrect} hoppet over`}
                     </span>
                   )
                 })()
               ) : (
                 <>
-                  <span className={remainingIncludingCurrent === 1 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>{remainingText}</span>
+                  <span className="text-gray-400">{remainingText}</span>
                   {skippedThisPass > 0 && (
                     <span className="text-yellow-500">{skippedThisPass} hoppet over</span>
                   )}

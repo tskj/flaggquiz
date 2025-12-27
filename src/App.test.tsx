@@ -50,7 +50,7 @@ describe('Quiz flow - no false positive struggled tracking', () => {
     render(<App />)
 
     // Start the world quiz
-    const startButton = screen.getByText('Hele verden')
+    const startButton = screen.getByText('Verden')
     await user.click(startButton)
 
     // Wait for quiz to start
@@ -114,7 +114,7 @@ describe('Quiz flow - no false positive struggled tracking', () => {
     render(<App />)
 
     // Start the world quiz
-    await user.click(screen.getByText('Hele verden'))
+    await user.click(screen.getByText('Verden'))
 
     await waitFor(() => {
       expect(screen.getByRole('textbox')).toBeInTheDocument()
@@ -169,7 +169,7 @@ describe('Quiz flow - typing through partial matches', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByText('Hele verden'))
+    await user.click(screen.getByText('Verden'))
 
     await waitFor(() => {
       expect(screen.getByRole('textbox')).toBeInTheDocument()
@@ -181,14 +181,14 @@ describe('Quiz flow - typing through partial matches', () => {
 
     const input = screen.getByRole('textbox')
 
-    // Type "nor" (partial match for Norge)
-    await user.type(input, 'nor')
+    // Type "Nor" (partial match for Norge)
+    await user.type(input, 'Nor')
 
     // Continue typing without backspace
-    await user.type(input, 'd-korea')
+    await user.type(input, 'd-Korea')
 
-    // The input should now be "nord-korea"
-    expect(input).toHaveValue('nord-korea')
+    // The input should now be "Nord-Korea"
+    expect(input).toHaveValue('Nord-Korea')
 
     // Clear and try again - this simulates completing the quiz
     await user.clear(input)
