@@ -786,9 +786,10 @@ export default function App() {
   if (quizFinished) {
     // Calculate which flags were never reached (still in queue after current position when quiz ended)
     // But exclude skipped flags - those were seen and should show as red, not gray
-    const unreachedFlags = new Set(
-      currentQueue.slice(currentIndex + 1).filter(f => !skippedFlags.includes(f))
-    )
+    // If hasSeenAll is true, all flags were seen at least once, so nothing is "unreached"
+    const unreachedFlags = hasSeenAll
+      ? new Set<string>()
+      : new Set(currentQueue.slice(currentIndex + 1).filter(f => !skippedFlags.includes(f)))
 
     const failedFlags = quizOrder.filter(country => !correctFlags.has(country) && !unreachedFlags.has(country))
     const struggledOnly = quizOrder.filter(country => correctFlags.has(country) && struggledFlags.has(country))
