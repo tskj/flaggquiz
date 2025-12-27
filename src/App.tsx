@@ -350,6 +350,7 @@ export default function App() {
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
   const [pendingWrongMatch, setPendingWrongMatch] = useState<string | null>(null)
   const [quizType, setQuizType] = useState<QuizType>('world')
+  const [selectedCountryModal, setSelectedCountryModal] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Derived state - computed during render, not via useEffect
@@ -1330,7 +1331,8 @@ export default function App() {
               return (
                 <div
                   key={country}
-                  className={`flex flex-col items-center rounded-lg overflow-hidden ${bgColor}`}
+                  className={`flex flex-col items-center rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform ${bgColor}`}
+                  onClick={() => setSelectedCountryModal(country)}
                 >
                   {isCapitalQuiz(quizType) ? (
                     // Capital quiz: show flag + country name + capital
@@ -1402,6 +1404,45 @@ export default function App() {
             })}
           </div>
         </div>
+
+        {/* Country detail modal */}
+        {selectedCountryModal && (
+          <div
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+            onClick={() => setSelectedCountryModal(null)}
+          >
+            <div
+              className="bg-gray-900 rounded-xl max-w-2xl w-full overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Map with flag overlay */}
+              <div className="relative w-full aspect-video">
+                <PrerenderedCountryMap
+                  highlightedCountry={selectedCountryModal}
+                  width={672}
+                  height={378}
+                  mode="quiz"
+                  allowZoomToggle={true}
+                />
+                {/* Flag in top right */}
+                <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg">
+                  <img
+                    src={currentFlags[selectedCountryModal as keyof typeof currentFlags]}
+                    alt={getQuizName(selectedCountryModal)}
+                    className="w-full object-contain"
+                  />
+                </div>
+              </div>
+              {/* Country name */}
+              <div className="p-4 text-center">
+                <h2 className="text-white text-2xl font-bold">{getQuizName(selectedCountryModal)}</h2>
+                {isCapitalQuiz(quizType) && europeanCapitals[selectedCountryModal] && (
+                  <p className="text-gray-400 text-lg mt-1">Hovedstad: {europeanCapitals[selectedCountryModal]}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
