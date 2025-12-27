@@ -1,20 +1,25 @@
 import { z } from 'zod'
 
-// Quiz types - flag quizzes, map quizzes, and kids quizzes
+// Quiz types - flag quizzes, map quizzes, kids quizzes, and capital quizzes
 export type QuizType =
   | 'world' | 'europe' | 'africa' | 'asia' | 'north-america' | 'south-america' | 'oceania' | 'territories'
   | 'map-world' | 'map-europe' | 'map-africa' | 'map-asia' | 'map-north-america' | 'map-south-america' | 'map-oceania' | 'map-territories'
   | 'kids-europe' | 'kids-map-europe' | 'kids-world' | 'kids-map-world'
+  | 'capital-input-europe' | 'capital-choice-europe'
 
 export const isMapQuiz = (type: QuizType): boolean => type.startsWith('map-') || type === 'kids-map-europe' || type === 'kids-map-world'
 export const isKidsQuiz = (type: QuizType): boolean => type.startsWith('kids-')
 export const isKidsFlagQuiz = (type: QuizType): boolean => type === 'kids-europe' || type === 'kids-world'
 export const isKidsMapQuiz = (type: QuizType): boolean => type === 'kids-map-europe' || type === 'kids-map-world'
+export const isCapitalQuiz = (type: QuizType): boolean => type.startsWith('capital-')
+export const isCapitalInputQuiz = (type: QuizType): boolean => type === 'capital-input-europe'
+export const isCapitalChoiceQuiz = (type: QuizType): boolean => type === 'capital-choice-europe'
 export const getBaseQuizType = (type: QuizType): QuizType =>
   type.startsWith('map-') ? type.replace('map-', '') as QuizType :
   type === 'kids-map-europe' ? 'europe' as QuizType :
   type === 'kids-map-world' ? 'world' as QuizType :
-  type.startsWith('kids-') ? type.replace('kids-', '') as QuizType : type
+  type.startsWith('kids-') ? type.replace('kids-', '') as QuizType :
+  type.startsWith('capital-') ? 'europe' as QuizType : type
 
 // Schema for a single quiz session
 export const QuizSessionSchema = z.object({
@@ -26,7 +31,8 @@ export const QuizSessionSchema = z.object({
   quizType: z.enum([
     'world', 'europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania', 'territories',
     'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania', 'map-territories',
-    'kids-europe', 'kids-map-europe', 'kids-world', 'kids-map-world'
+    'kids-europe', 'kids-map-europe', 'kids-world', 'kids-map-world',
+    'capital-input-europe', 'capital-choice-europe'
   ]).default('world'),
 
   // Quiz configuration
@@ -50,6 +56,10 @@ export const QuizSessionSchema = z.object({
   // Kids mode
   kidsMode: z.boolean().optional().default(false),
   currentOptions: z.array(z.string()).optional().default([]),
+
+  // Capital choice quiz - what type of representation each option shows
+  // 'name' = country name, 'flag' = country flag, 'map' = country map
+  capitalChoiceTypes: z.array(z.enum(['name', 'flag', 'map'])).optional().default([]),
 })
 
 export type QuizSession = z.infer<typeof QuizSessionSchema>
@@ -140,6 +150,8 @@ export function getHighScores(): Record<QuizType, HighScore | null> {
     'kids-map-europe': null,
     'kids-world': null,
     'kids-map-world': null,
+    'capital-input-europe': null,
+    'capital-choice-europe': null,
   }
 
   for (const session of history.sessions) {

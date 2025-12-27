@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
 import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
-import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
 import { CountryMap, preloadMapData } from './CountryMap'
 import { getQuizOptions } from './kidsQuizData'
+import { europeanCapitals, getCapitalAlternatives } from './europeanCapitals'
 
 // Start preloading map data immediately
 preloadMapData()
@@ -323,6 +324,7 @@ export default function App() {
   const [practiceMode, setPracticeMode] = useState(false)
   const [kidsMode, setKidsMode] = useState(false)
   const [currentOptions, setCurrentOptions] = useState<string[]>([])
+  const [capitalChoiceTypes, setCapitalChoiceTypes] = useState<('name' | 'flag' | 'map')[]>([])
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [justAnswered, setJustAnswered] = useState(false)
   const [quizOrder, setQuizOrder] = useState<string[]>([])
@@ -356,6 +358,13 @@ export default function App() {
   const countriesWithoutMapData = ['Kosovo']
 
   const getQuizCount = (type: QuizType): number => {
+    // Capital quizzes - filter out countries without map data for choice quiz
+    if (type === 'capital-input-europe') {
+      return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c)).length
+    }
+    if (type === 'capital-choice-europe') {
+      return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c)).length
+    }
     const baseType = getBaseQuizType(type)
     const mapFilter = isMapQuiz(type) ? countriesWithoutMapData.length : 0
     switch (baseType) {
@@ -375,6 +384,8 @@ export default function App() {
     if (type === 'kids-map-europe') return 'Europas land'
     if (type === 'kids-world') return 'Verdens flagg'
     if (type === 'kids-map-world') return 'Verdens land'
+    if (type === 'capital-input-europe') return 'Hovedsteder (skriv)'
+    if (type === 'capital-choice-europe') return 'Hovedsteder (velg)'
     const baseType = getBaseQuizType(type)
     const prefix = isMapQuiz(type) ? 'Kart: ' : ''
     switch (baseType) {
@@ -425,8 +436,9 @@ export default function App() {
       input,
       kidsMode,
       currentOptions,
+      capitalChoiceTypes,
     }
-  }, [sessionId, quizFinished, practiceMode, kidsMode, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, hasSeenAll, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input, currentOptions])
+  }, [sessionId, quizFinished, practiceMode, kidsMode, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, hasSeenAll, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input, currentOptions, capitalChoiceTypes])
 
   // Load session on mount
   useEffect(() => {
@@ -448,6 +460,7 @@ export default function App() {
       setPendingWrongMatch(saved.pendingWrongMatch)
       setInput(saved.input)
       setCurrentOptions(saved.currentOptions || [])
+      setCapitalChoiceTypes(saved.capitalChoiceTypes || [])
       // Reconstruct seenFlags from saved state
       // If round > 1, all flags have been seen; otherwise, it's correct + skipped + current queue up to index
       if (saved.round > 1) {
@@ -562,9 +575,17 @@ export default function App() {
     }
   }
 
+  // Generate random choice types for capital choice quiz (mix of name, flag, map)
+  const generateCapitalChoiceTypes = (): ('name' | 'flag' | 'map')[] => {
+    const types: ('name' | 'flag' | 'map')[] = ['name', 'flag', 'map']
+    // Pick 4 random types (with replacement to ensure variety)
+    return [0, 1, 2, 3].map(() => types[Math.floor(Math.random() * types.length)])
+  }
+
   const startQuiz = (type: QuizType = 'world') => {
     clearActiveSession()
     const isKids = isKidsQuiz(type)
+    const isCapital = isCapitalQuiz(type)
     // For kids quizzes, determine country list based on type
     let allCountries: string[]
     if (type === 'kids-europe') {
@@ -575,14 +596,19 @@ export default function App() {
       allCountries = Object.keys(countryFlags)
     } else if (type === 'kids-map-world') {
       allCountries = Object.keys(countryFlags).filter(c => !countriesWithoutMapData.includes(c))
+    } else if (isCapital) {
+      // Capital quizzes - European countries with capitals, excluding Kosovo for map display
+      allCountries = europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c))
     } else {
       allCountries = getCountriesForType(type)
     }
     const shuffled = shuffleArray(allCountries)
     const newSessionId = Date.now().toString()
     // Kids mode times: Europe 10 min, World 35 min
+    // Capital quiz times: input 10 min, choice 5 min
     const kidsTime = (type === 'kids-europe' || type === 'kids-map-europe') ? 10 * 60 : 35 * 60
-    const defaultTime = isKids ? kidsTime : getDefaultTime(type)
+    const capitalTime = type === 'capital-choice-europe' ? 5 * 60 : 10 * 60
+    const defaultTime = isKids ? kidsTime : isCapital ? capitalTime : getDefaultTime(type)
     setSessionId(newSessionId)
     setQuizType(type)
     setKidsMode(isKids)
@@ -600,11 +626,17 @@ export default function App() {
     setCurrentAttempts([])
     setInput('')
     setSelectedOption(null)
+    setCapitalChoiceTypes([])
     // Generate options for first question in kids mode
     if (isKids && shuffled.length > 0) {
       // For world quizzes, pass the full country list for random distractors
       const useRandomDistractors = type === 'kids-world' || type === 'kids-map-world'
       setCurrentOptions(getQuizOptions(shuffled[0], useRandomDistractors ? allCountries : undefined))
+    }
+    // Generate options for capital choice quiz
+    if (type === 'capital-choice-europe' && shuffled.length > 0) {
+      setCurrentOptions(getQuizOptions(shuffled[0], allCountries))
+      setCapitalChoiceTypes(generateCapitalChoiceTypes())
     }
   }
 
@@ -618,8 +650,20 @@ export default function App() {
   const correctAnswer = getQuizName(currentCountry)
   const altNames = alternativeNames[currentCountry] || []
 
+  // For capital quizzes, the correct answer is the capital name
+  const correctCapital = europeanCapitals[currentCountry] || ''
+  const capitalAltNames = getCapitalAlternatives(correctCapital)
+  // All capital names for ambiguity checking
+  const allCapitalNames = Object.values(europeanCapitals)
+
   // Check if value matches the correct answer or any alternative name
   const matchesCorrectAnswer = (value: string): boolean => {
+    // For capital input quiz, check against capital names
+    if (isCapitalInputQuiz(quizType)) {
+      const result = matchAnswer(value, correctCapital, allCapitalNames, capitalAltNames, {})
+      return result[0] === 'match'
+    }
+    // For other quizzes, check against country names
     const result = matchAnswer(value, correctAnswer, allNorwegianNames, altNames, norwegianAlternativeNames)
     return result[0] === 'match'
   }
@@ -650,27 +694,48 @@ export default function App() {
         }
       }, 400)
     } else {
-      // Check if input is a strict match for any other country (for tracking wrong attempts)
+      // Check if input is a strict match for any other answer (for tracking wrong attempts)
       // Uses strict matching to avoid false positives like "Tsjekkia" matching "Tsjad"
       let currentMatch: string | null = null
       if (value.trim().length >= 3) {
-        for (const country of Object.keys(currentFlags)) {
-          if (country === currentCountry) continue
-          const countryName = getQuizName(country)
-          // Use strict matching: requires similar length and very low edit distance
-          if (isStrictMatch(value, countryName)) {
-            currentMatch = country
-            break
+        if (isCapitalInputQuiz(quizType)) {
+          // For capital quiz, check against other capitals
+          for (const [country, capital] of Object.entries(europeanCapitals)) {
+            if (country === currentCountry) continue
+            if (isStrictMatch(value, capital)) {
+              currentMatch = capital  // Store the capital name, not country
+              break
+            }
+            // Also check alternative spellings
+            const altNames = getCapitalAlternatives(capital)
+            for (const alt of altNames) {
+              if (isStrictMatch(value, alt)) {
+                currentMatch = capital
+                break
+              }
+            }
+            if (currentMatch) break
           }
-          // Also check alternative names
-          const countryAltNames = alternativeNames[country] || []
-          for (const alt of countryAltNames) {
-            if (isStrictMatch(value, alt)) {
+        } else {
+          // For other quizzes, check against country names
+          for (const country of Object.keys(currentFlags)) {
+            if (country === currentCountry) continue
+            const countryName = getQuizName(country)
+            // Use strict matching: requires similar length and very low edit distance
+            if (isStrictMatch(value, countryName)) {
               currentMatch = country
               break
             }
+            // Also check alternative names
+            const countryAltNames = alternativeNames[country] || []
+            for (const alt of countryAltNames) {
+              if (isStrictMatch(value, alt)) {
+                currentMatch = country
+                break
+              }
+            }
+            if (currentMatch) break
           }
-          if (currentMatch) break
         }
       }
 
@@ -811,6 +876,82 @@ export default function App() {
             setSelectedOption(null)
             setJustAnswered(false)
             setSeenFlags(prev => new Set(prev).add(nextFlag))
+            setCurrentAttempts([])
+          } else {
+            setQuizFinished(true)
+            setJustAnswered(false)
+          }
+        }
+      }, 1200)  // Longer delay to show correct answer
+    }
+  }
+
+  // Handle capital choice quiz option selection
+  const handleCapitalChoiceClick = (selectedCountry: string) => {
+    if (justAnswered) return  // Prevent double-clicks
+
+    setSelectedOption(selectedCountry)
+    const isCorrect = selectedCountry === currentCountry
+    setJustAnswered(true)
+
+    if (isCorrect) {
+      // Correct answer
+      const newCorrectFlags = new Set(correctFlags).add(currentCountry)
+      setCorrectFlags(newCorrectFlags)
+
+      // Check if this was the last question
+      const isLastQuestion = currentIndex + 1 >= currentQueue.length &&
+        quizOrder.every(f => newCorrectFlags.has(f))
+
+      setTimeout(() => {
+        if (isLastQuestion) {
+          setQuizFinished(true)
+          setJustAnswered(false)
+        } else {
+          // Get next question and options BEFORE updating state
+          const nextCountry = currentQueue[currentIndex + 1]
+          const nextOptions = getQuizOptions(nextCountry, quizOrder)
+          // Update all state together
+          setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setCapitalChoiceTypes(generateCapitalChoiceTypes())
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextCountry))
+          setCurrentAttempts([])
+        }
+      }, 600)
+    } else {
+      // Wrong answer - track as struggled, show correct answer, then move on
+      setCurrentAttempts(prev => [...prev, selectedCountry])
+      setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts, selectedCountry]))
+
+      setTimeout(() => {
+        // Get next question and options BEFORE updating state
+        if (currentIndex + 1 < currentQueue.length) {
+          const nextCountry = currentQueue[currentIndex + 1]
+          const nextOptions = getQuizOptions(nextCountry, quizOrder)
+          // Update all state together
+          setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setCapitalChoiceTypes(generateCapitalChoiceTypes())
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextCountry))
+          setCurrentAttempts([])
+        } else {
+          // End of queue - handle round completion
+          const remainingIncorrect = quizOrder.filter(f => !correctFlags.has(f))
+          if (remainingIncorrect.length > 0) {
+            const nextCountry = remainingIncorrect[0]
+            const nextOptions = getQuizOptions(nextCountry, quizOrder)
+            setCurrentQueue(remainingIncorrect)
+            setCurrentIndex(0)
+            setCurrentOptions(nextOptions)
+            setCapitalChoiceTypes(generateCapitalChoiceTypes())
+            setSelectedOption(null)
+            setJustAnswered(false)
+            setSeenFlags(prev => new Set(prev).add(nextCountry))
             setCurrentAttempts([])
           } else {
             setQuizFinished(true)
@@ -970,6 +1111,35 @@ export default function App() {
           </button>
         </div>
 
+        {/* For Turid section - Capital quizzes */}
+        <h2 className="text-gray-400 text-sm mb-2">For Turid</h2>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
+          <button
+            onClick={() => startQuiz('capital-input-europe')}
+            className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['capital-input-europe'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['capital-input-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['capital-input-europe'].correct}/{highScores['capital-input-europe'].total}
+              </span>
+            )}
+            Europas Hovedsteder
+            <span className="block text-sm font-normal opacity-90">{getQuizCount('capital-input-europe')} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 10 min</span></span>
+          </button>
+          <button
+            onClick={() => startQuiz('capital-choice-europe')}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['capital-choice-europe'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['capital-choice-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['capital-choice-europe'].correct}/{highScores['capital-choice-europe'].total}
+              </span>
+            )}
+            Europas Hovedsteder (velg)
+            <span className="block text-sm font-normal opacity-90">{getQuizCount('capital-choice-europe')} land<span className={practiceMode ? ' line-through opacity-50' : ''}> - 5 min</span></span>
+          </button>
+        </div>
+
         <h2 className="text-gray-400 text-sm mb-2">Flagg</h2>
         <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
           {flagQuizOptions.map(renderQuizButton)}
@@ -1077,12 +1247,30 @@ export default function App() {
                 textColor = 'text-green-400'
               }
 
+              // For capital quizzes, show the capital name with the country
+              const capitalName = europeanCapitals[country]
+
               return (
                 <div
                   key={country}
                   className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
                 >
-                  {isMapQuiz(quizType) && !isKidsQuiz(quizType) ? (
+                  {isCapitalQuiz(quizType) ? (
+                    // Capital quiz: show flag + country name + capital
+                    <>
+                      <img
+                        src={flagUrl}
+                        alt={name}
+                        className="w-20 h-12 object-contain mb-1"
+                      />
+                      <span className={`text-xs text-center ${textColor}`}>
+                        {name}
+                      </span>
+                      <span className="text-xs text-gray-400 text-center">
+                        {capitalName}
+                      </span>
+                    </>
+                  ) : isMapQuiz(quizType) && !isKidsQuiz(quizType) ? (
                     <div className="w-20 h-12 mb-1">
                       <CountryMap highlightedCountry={country} width={80} height={48} mode="overview" />
                     </div>
@@ -1093,12 +1281,14 @@ export default function App() {
                       className="w-20 h-12 object-contain mb-1"
                     />
                   )}
-                  <span className={`text-xs text-center ${textColor}`}>
-                    {name}
-                  </span>
+                  {!isCapitalQuiz(quizType) && (
+                    <span className={`text-xs text-center ${textColor}`}>
+                      {name}
+                    </span>
+                  )}
                   {isStruggled && attempts && (
                     <span className="text-xs text-gray-500 text-center mt-1">
-                      Prøvde: {attempts.map(c => getQuizName(c)).join(', ')}
+                      Prøvde: {isCapitalQuiz(quizType) ? attempts.join(', ') : attempts.map(c => getQuizName(c)).join(', ')}
                     </span>
                   )}
                 </div>
@@ -1153,9 +1343,31 @@ export default function App() {
           </div>
         </div>
 
-        {isKidsMapQuiz(quizType) ? (
-          /* Kids map quiz: Map + country name as question */
+        {isCapitalInputQuiz(quizType) ? (
+          /* Capital input quiz: Map with flag overlay + country name as question */
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+            <div className="relative aspect-video mb-3">
+              <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
+              <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg bg-gray-800">
+                <img
+                  src={flagUrl}
+                  alt="Flagg"
+                  className="w-full object-contain"
+                />
+              </div>
+            </div>
+            <p className="text-white text-xl sm:text-2xl font-bold text-center">{correctAnswer}</p>
+            <p className="text-gray-400 text-sm text-center mt-1">Hva er hovedstaden?</p>
+          </div>
+        ) : isCapitalChoiceQuiz(quizType) ? (
+          /* Capital choice quiz: Capital name as question */
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mt-8 sm:mt-12 mb-10 sm:mb-14 text-center">
+            <p className="text-gray-400 text-sm mb-2">Hvilket land har denne hovedstaden?</p>
+            <p className="text-white text-3xl sm:text-4xl font-bold">{correctCapital}</p>
+          </div>
+        ) : isKidsMapQuiz(quizType) ? (
+          /* Kids map quiz: Map + country name as question */
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-10 sm:mb-14">
             <div className="aspect-video mb-2">
               <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
             </div>
@@ -1169,11 +1381,97 @@ export default function App() {
           <img
             src={flagUrl}
             alt="Flagg"
-            className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 object-contain mb-2 sm:mb-4"
+            className={`w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg h-36 sm:h-48 lg:h-72 object-contain ${isKidsFlagQuiz(quizType) ? 'mb-10 sm:mb-14' : 'mb-2 sm:mb-4'}`}
           />
         )}
 
-        {isKidsMapQuiz(quizType) ? (
+        {isCapitalInputQuiz(quizType) ? (
+          /* Capital input quiz: Text input for capital name */
+          <>
+            <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+              <input
+                ref={inputRef}
+                type="text"
+                value={justAnswered ? correctCapital : input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Skriv hovedstadens navn..."
+                className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 ${
+                  justAnswered
+                    ? 'bg-green-600 border-green-500 border-2 font-bold'
+                    : 'bg-gray-900 border border-gray-700 focus:border-blue-500'
+                }`}
+                autoComplete="off"
+                autoCapitalize="off"
+                readOnly={justAnswered}
+              />
+            </div>
+
+            <button
+              onClick={skipFlag}
+              className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+            >
+              Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
+            </button>
+          </>
+        ) : isCapitalChoiceQuiz(quizType) ? (
+          /* Capital choice quiz: Mixed options (2x2 grid with name/flag/map) */
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-2 gap-3">
+            {currentOptions.filter(opt => opt in countryFlags).map((option, idx) => {
+              const choiceType = capitalChoiceTypes[idx] || 'name'
+              const optionFlagUrl = countryFlags[option as keyof typeof countryFlags]
+              const optionName = norwegianNames[option] || option
+              const isSelected = selectedOption === option
+              const isCorrectOption = option === currentCountry
+              const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
+
+              let borderClass = ''
+              if (justAnswered) {
+                if (isSelected && isCorrectOption) {
+                  borderClass = 'ring-4 ring-green-400'
+                } else if (isSelected && !isCorrectOption) {
+                  borderClass = 'ring-4 ring-red-400'
+                } else if (wasWrongAnswer && isCorrectOption) {
+                  borderClass = 'ring-4 ring-green-400'
+                }
+              }
+
+              // Render different content based on choice type
+              let content: React.ReactNode
+              if (choiceType === 'flag') {
+                content = (
+                  <img
+                    src={optionFlagUrl}
+                    alt="Flagg"
+                    className="w-full h-20 sm:h-24 object-contain"
+                  />
+                )
+              } else if (choiceType === 'map') {
+                content = (
+                  <div className="w-full h-20 sm:h-24 flex items-center justify-center">
+                    <CountryMap highlightedCountry={option} width={120} height={80} mode="overview" />
+                  </div>
+                )
+              } else {
+                // 'name'
+                content = (
+                  <span className="text-white font-bold text-lg py-4">{optionName}</span>
+                )
+              }
+
+              return (
+                <button
+                  key={option}
+                  onClick={() => handleCapitalChoiceClick(option)}
+                  disabled={justAnswered}
+                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 p-2 bg-gray-800 hover:bg-gray-700 flex items-center justify-center min-h-[6rem]`}
+                >
+                  {content}
+                </button>
+              )
+            })}
+          </div>
+        ) : isKidsMapQuiz(quizType) ? (
           /* Kids map quiz: Flag options (2x2 grid) */
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-2 gap-3">
             {currentOptions.filter(opt => opt in countryFlags).map((option) => {
