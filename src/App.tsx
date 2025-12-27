@@ -764,11 +764,20 @@ export default function App() {
     checkAnswer(value, prevValue)
   }
 
-  const skipFlag = () => {
-    moveToNext(true)
+  // Save current attempts (including pending wrong match) to struggledFlags
+  const saveCurrentAttempts = () => {
+    const allAttempts = pendingWrongMatch && !currentAttempts.includes(pendingWrongMatch)
+      ? [...currentAttempts, pendingWrongMatch]
+      : currentAttempts
+    if (allAttempts.length > 0) {
+      setStruggledFlags(prev => new Map(prev).set(currentCountry, allAttempts))
+    }
   }
 
+  const skipFlag = () => moveToNext(true)
+
   const giveUp = () => {
+    saveCurrentAttempts()
     setQuizFinished(true)
   }
 
@@ -780,10 +789,7 @@ export default function App() {
   }
 
   const moveToNext = (_wasSkipped: boolean) => {
-    // Save any attempts made on this flag (even if skipping)
-    if (currentAttempts.length > 0) {
-      setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts]))
-    }
+    saveCurrentAttempts()
 
     if (currentIndex + 1 < currentQueue.length) {
       // Move to next flag and mark it as seen
