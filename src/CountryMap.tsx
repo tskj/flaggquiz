@@ -186,6 +186,9 @@ interface CountryFeature extends Feature<Geometry> {
   properties: { name: string }
 }
 
+// Countries where insets don't make sense - just show everything in the main view
+const countriesWithoutInsets = ['Bahamas', 'Canada']
+
 function CountryMapInner({
   highlightedCountry,
   width = 400,
@@ -197,7 +200,11 @@ function CountryMapInner({
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
-  const [showInsets, setShowInsets] = useState(true)
+  const [showInsetsState, setShowInsetsState] = useState(true)
+
+  // Some countries should never use insets
+  const forceNoInsets = countriesWithoutInsets.includes(highlightedCountry)
+  const showInsets = forceNoInsets ? false : showInsetsState
 
   // Load data (uses cache if available)
   useEffect(() => {
@@ -240,7 +247,8 @@ function CountryMapInner({
     return getPolygonParts(targetFeature50m)
   }, [targetFeature50m])
 
-  const hasInsets = polygonParts?.insets && polygonParts.insets.length > 0
+  // Only show inset toggle if there are insets AND this country isn't in the no-insets list
+  const hasInsets = !forceNoInsets && polygonParts?.insets && polygonParts.insets.length > 0
 
   const { pathGenerator, projectionScale, projection } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000, projection: null }
@@ -548,7 +556,7 @@ function CountryMapInner({
   }
 
   // Toggle insets on click (only if there are insets)
-  const handleClick = hasInsets ? () => setShowInsets(prev => !prev) : undefined
+  const handleClick = hasInsets ? () => setShowInsetsState(prev => !prev) : undefined
 
   return (
     <svg
