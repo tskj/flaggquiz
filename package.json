@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "prerender": "node scripts/prerender-maps.mjs",
+    "build": "npm run prerender && tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest"
   },

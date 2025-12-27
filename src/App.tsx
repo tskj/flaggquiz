@@ -4,6 +4,7 @@ import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
 import { CountryMap, preloadMapData } from './CountryMap'
+import { PrerenderedCountryMap } from './PrerenderedCountryMap'
 import { getQuizOptions } from './kidsQuizData'
 import { europeanCapitals, getCapitalAlternatives, capitalCoordinates } from './europeanCapitals'
 
@@ -1275,7 +1276,7 @@ export default function App() {
                     </>
                   ) : isMapQuiz(quizType) && !isKidsQuiz(quizType) ? (
                     <div className="w-20 h-12 mb-1">
-                      <CountryMap highlightedCountry={country} width={80} height={48} mode="overview" />
+                      <PrerenderedCountryMap highlightedCountry={country} width={80} height={48} mode="overview" />
                     </div>
                   ) : (
                     <img
@@ -1463,7 +1464,7 @@ export default function App() {
                     disabled={justAnswered}
                     className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
                   >
-                    <CountryMap highlightedCountry={option} width={200} height={112} mode="overview" />
+                    <PrerenderedCountryMap highlightedCountry={option} width={200} height={112} mode="overview" />
                   </button>
                 )
               } else {
