@@ -1,10 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { CountryMap } from './CountryMap'
-import { projectCapitalToScreen } from './mapRenderer'
-import { countryToISO } from './countryISOCodes'
-import { feature } from 'topojson-client'
-import type { Topology, GeometryCollection } from 'topojson-specification'
-import type { FeatureCollection, Feature, Geometry } from 'geojson'
+import capitalPositions from './capitalScreenPositions.json'
 
 interface PrerenderedCountryMapProps {
   highlightedCountry: string
@@ -22,26 +18,6 @@ const PRERENDERED_SIZES: { width: number; height: number; mode: 'quiz' | 'overvi
   { width: 200, height: 133, mode: 'overview' },  // Capital choice quiz options
   { width: 672, height: 378, mode: 'quiz' },      // Main quiz view (16:9)
 ]
-
-// Module-level cache for geo data (shared with CountryMap)
-let geoDataCache: { countries10m: FeatureCollection } | null = null
-let geoDataPromise: Promise<{ countries10m: FeatureCollection }> | null = null
-
-async function loadGeoData(): Promise<{ countries10m: FeatureCollection }> {
-  if (geoDataCache) return geoDataCache
-  if (!geoDataPromise) {
-    geoDataPromise = fetch('https://unpkg.com/world-atlas@2.0.2/countries-10m.json')
-      .then(res => res.json())
-      .then((topo: Topology) => {
-        const geo10m = topo.objects.countries as GeometryCollection
-        geoDataCache = {
-          countries10m: feature(topo, geo10m) as FeatureCollection
-        }
-        return geoDataCache
-      })
-  }
-  return geoDataPromise
-}
 
 // Sanitize country name to match filename format
 function getSafeCountryName(country: string): string {
@@ -61,6 +37,14 @@ function getPrerenderedUrl(country: string, width: number, height: number, mode:
   return `${base}maps/${safeName}-${width}x${height}-${mode}${variantSuffix}.png`
 }
 
+// Get precomputed capital position
+type CapitalPositions = Record<string, Record<'default' | 'zoomed-out', { x: number; y: number; radius: number } | null>>
+const typedCapitalPositions = capitalPositions as CapitalPositions
+
+function getCapitalScreenPos(country: string, variant: 'default' | 'zoomed-out'): { x: number; y: number; radius: number } | null {
+  return typedCapitalPositions[country]?.[variant] ?? null
+}
+
 /**
  * Uses pre-rendered PNG images with optional capital marker overlay.
  * Falls back to live SVG rendering only for non-prerendered sizes.
@@ -76,20 +60,12 @@ export function PrerenderedCountryMap({
 }: PrerenderedCountryMapProps) {
   const [imageError, setImageError] = useState(false)
   const [isZoomedOut, setIsZoomedOut] = useState(false)
-  const [geoData, setGeoData] = useState(geoDataCache)
 
   // Reset zoom state when country changes
   useEffect(() => {
     setIsZoomedOut(false)
     setImageError(false)
   }, [highlightedCountry])
-
-  // Load geo data only if we need to project capital coordinates
-  useEffect(() => {
-    if (capitalCoords && !geoData) {
-      loadGeoData().then(setGeoData)
-    }
-  }, [capitalCoords, geoData])
 
   // Use pre-rendered if we have a matching size+mode combo
   const canUsePrerendered = hasPrerenderedSize(width, height, mode) && !imageError
@@ -104,22 +80,10 @@ export function PrerenderedCountryMap({
     }
   }, [highlightedCountry, width, height, mode, canUsePrerendered])
 
-  // Compute capital screen position if needed
-  const capitalScreenPos = useMemo(() => {
-    if (!capitalCoords || !geoData) return null
-    const iso = countryToISO[highlightedCountry]
-    const countryFeature = geoData.countries10m.features.find(f => (f as { id?: string }).id === iso) as Feature<Geometry> | undefined
-    if (!countryFeature) return null
-
-    const variant = isZoomedOut ? 'zoomed-out' : 'default'
-    return projectCapitalToScreen(highlightedCountry, countryFeature, capitalCoords, {
-      width,
-      height,
-      mode,
-      variant,
-      scaleFactor: 1
-    })
-  }, [capitalCoords, geoData, highlightedCountry, width, height, mode, isZoomedOut])
+  // Get precomputed capital position (only for 672x378 quiz mode)
+  const capitalScreenPos = capitalCoords && width === 672 && height === 378 && mode === 'quiz'
+    ? getCapitalScreenPos(highlightedCountry, isZoomedOut ? 'zoomed-out' : 'default')
+    : null
 
   if (canUsePrerendered) {
     const variant = isZoomedOut ? 'zoomed-out' : 'default'

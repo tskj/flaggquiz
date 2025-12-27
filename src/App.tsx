@@ -3,7 +3,7 @@ import countryFlags from '../country-flags.json'
 import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
 import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
-import { CountryMap, preloadMapData } from './CountryMap'
+import { preloadMapData } from './CountryMap'
 import { PrerenderedCountryMap } from './PrerenderedCountryMap'
 import { getQuizOptions } from './kidsQuizData'
 import { europeanCapitals, getCapitalAlternatives, capitalCoordinates } from './europeanCapitals'
@@ -1400,7 +1400,7 @@ export default function App() {
           /* Capital input quiz: Map with flag overlay + country name as question */
           <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">
             <div className="relative aspect-video mb-3 rounded-lg overflow-hidden">
-              <CountryMap highlightedCountry={currentCountry} width={672} height={378} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
+              <PrerenderedCountryMap highlightedCountry={currentCountry} width={672} height={378} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} capitalCoords={capitalCoordinates[currentCountry]} />
               <div className="absolute top-2 right-2 w-16 sm:w-20 rounded-md overflow-hidden shadow-lg bg-gray-800">
                 <img
                   src={flagUrl}

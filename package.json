@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prerender": "npx tsx scripts/prerenderMaps.ts",
+    "prerender": "npx tsx scripts/prerenderMaps.ts && npx tsx scripts/prerenderCapitalPositions.ts",
     "build": "npm run prerender && tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest"

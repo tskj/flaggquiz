@@ -1,0 +1,542 @@
+{
+  "Albania": {
+    "default": {
+      "x": 325.4,
+      "y": 177.6,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.2,
+      "y": 188.2,
+      "radius": 2
+    }
+  },
+  "Andorra": {
+    "default": {
+      "x": 312.4,
+      "y": 217.5,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.9,
+      "y": 189.2,
+      "radius": 2
+    }
+  },
+  "Austria": {
+    "default": {
+      "x": 431.4,
+      "y": 148.6,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 342.6,
+      "y": 186.2,
+      "radius": 2
+    }
+  },
+  "Belarus": {
+    "default": {
+      "x": 326.3,
+      "y": 175.1,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 334.8,
+      "y": 187.3,
+      "radius": 2
+    }
+  },
+  "Belgium": {
+    "default": {
+      "x": 319.3,
+      "y": 169.8,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.2,
+      "y": 188.1,
+      "radius": 2
+    }
+  },
+  "Bosnia and Herzegovina": {
+    "default": {
+      "x": 366,
+      "y": 209.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 338,
+      "y": 190.4,
+      "radius": 2
+    }
+  },
+  "Bulgaria": {
+    "default": {
+      "x": 253.6,
+      "y": 192.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 329.9,
+      "y": 189.3,
+      "radius": 2
+    }
+  },
+  "Croatia": {
+    "default": {
+      "x": 323.4,
+      "y": 156.2,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 334.7,
+      "y": 185.7,
+      "radius": 2
+    }
+  },
+  "Cyprus": {
+    "default": {
+      "x": 406,
+      "y": 130,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 337.4,
+      "y": 187.8,
+      "radius": 2
+    }
+  },
+  "Czech Republic": {
+    "default": {
+      "x": 295.1,
+      "y": 164.3,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 333.5,
+      "y": 187.5,
+      "radius": 2
+    }
+  },
+  "Denmark": {
+    "default": {
+      "x": 415.7,
+      "y": 203.5,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 342.2,
+      "y": 190.1,
+      "radius": 2
+    }
+  },
+  "Estonia": {
+    "default": {
+      "x": 302.8,
+      "y": 125.2,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 334.3,
+      "y": 185.7,
+      "radius": 2
+    }
+  },
+  "Finland": {
+    "default": {
+      "x": 325.1,
+      "y": 260.3,
+      "radius": 2
+    },
+    "zoomed-out": {
+      "x": 333.3,
+      "y": 206.8,
+      "radius": 2
+    }
+  },
+  "France": {
+    "default": {
+      "x": 333.3,
+      "y": 144.8,
+      "radius": 2.2
+    },
+    "zoomed-out": {
+      "x": 352.7,
+      "y": 171.5,
+      "radius": 2
+    }
+  },
+  "Germany": {
+    "default": {
+      "x": 378.5,
+      "y": 154.4,
+      "radius": 2.6
+    },
+    "zoomed-out": {
+      "x": 344.1,
+      "y": 182.4,
+      "radius": 2
+    }
+  },
+  "Greece": {
+    "default": {
+      "x": 351,
+      "y": 215.7,
+      "radius": 2.9
+    },
+    "zoomed-out": {
+      "x": 338.6,
+      "y": 193.5,
+      "radius": 2
+    }
+  },
+  "Hungary": {
+    "default": {
+      "x": 321.5,
+      "y": 168,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335,
+      "y": 187.6,
+      "radius": 2
+    }
+  },
+  "Iceland": {
+    "default": {
+      "x": 256.8,
+      "y": 235.2,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 329.9,
+      "y": 192.6,
+      "radius": 2
+    }
+  },
+  "Ireland": {
+    "default": {
+      "x": 387.4,
+      "y": 179.9,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 340.9,
+      "y": 188.1,
+      "radius": 2
+    }
+  },
+  "Italy": {
+    "default": {
+      "x": 339.4,
+      "y": 201.4,
+      "radius": 2
+    },
+    "zoomed-out": {
+      "x": 337,
+      "y": 192.5,
+      "radius": 2
+    }
+  },
+  "Latvia": {
+    "default": {
+      "x": 303,
+      "y": 182.2,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 334.1,
+      "y": 188.6,
+      "radius": 2
+    }
+  },
+  "Liechtenstein": {
+    "default": {
+      "x": 324,
+      "y": 186.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.9,
+      "y": 189,
+      "radius": 2
+    }
+  },
+  "Lithuania": {
+    "default": {
+      "x": 391.8,
+      "y": 233,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 339.5,
+      "y": 191.7,
+      "radius": 2
+    }
+  },
+  "Luxembourg": {
+    "default": {
+      "x": 345.1,
+      "y": 226.8,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 336.2,
+      "y": 189.7,
+      "radius": 2
+    }
+  },
+  "Malta": {
+    "default": {
+      "x": 394.6,
+      "y": 203.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 336.4,
+      "y": 189.1,
+      "radius": 2
+    }
+  },
+  "Moldova": {
+    "default": {
+      "x": 351.9,
+      "y": 199.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 337.2,
+      "y": 189.8,
+      "radius": 2
+    }
+  },
+  "Monaco": {
+    "default": {
+      "x": 410.3,
+      "y": 195,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 336.1,
+      "y": 189,
+      "radius": 2
+    }
+  },
+  "Montenegro": {
+    "default": {
+      "x": 338,
+      "y": 226.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 336.1,
+      "y": 190.5,
+      "radius": 2
+    }
+  },
+  "Netherlands": {
+    "default": {
+      "x": 308.6,
+      "y": 181.5,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.9,
+      "y": 188.3,
+      "radius": 2
+    }
+  },
+  "North Macedonia": {
+    "default": {
+      "x": 314.1,
+      "y": 141.5,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.2,
+      "y": 187.2,
+      "radius": 2
+    }
+  },
+  "Norway": {
+    "default": {
+      "x": 326.1,
+      "y": 239.7,
+      "radius": 2
+    },
+    "zoomed-out": {
+      "x": 327.9,
+      "y": 240.1,
+      "radius": 2
+    }
+  },
+  "Poland": {
+    "default": {
+      "x": 366,
+      "y": 184.9,
+      "radius": 3.5
+    },
+    "zoomed-out": {
+      "x": 340.2,
+      "y": 188.4,
+      "radius": 2
+    }
+  },
+  "Portugal": {
+    "default": {
+      "x": 304.7,
+      "y": 221.1,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 328.7,
+      "y": 204.1,
+      "radius": 2
+    }
+  },
+  "Romania": {
+    "default": {
+      "x": 366.9,
+      "y": 243.7,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 339.5,
+      "y": 195.2,
+      "radius": 2
+    }
+  },
+  "Russia": {
+    "default": {
+      "x": 212.7,
+      "y": 172.6,
+      "radius": 2
+    },
+    "zoomed-out": {
+      "x": 212.8,
+      "y": 172.6,
+      "radius": 2
+    }
+  },
+  "San Marino": {
+    "default": {
+      "x": 357,
+      "y": 177.6,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 336,
+      "y": 189,
+      "radius": 2
+    }
+  },
+  "Serbia": {
+    "default": {
+      "x": 324.4,
+      "y": 162.8,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 334.9,
+      "y": 186.5,
+      "radius": 2
+    }
+  },
+  "Slovakia": {
+    "default": {
+      "x": 199.1,
+      "y": 235.7,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 329.1,
+      "y": 191.3,
+      "radius": 2
+    }
+  },
+  "Slovenia": {
+    "default": {
+      "x": 310.4,
+      "y": 196.3,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 335.1,
+      "y": 189.3,
+      "radius": 2
+    }
+  },
+  "Spain": {
+    "default": {
+      "x": 333.7,
+      "y": 187.7,
+      "radius": 2.6
+    },
+    "zoomed-out": {
+      "x": 335.9,
+      "y": 186.6,
+      "radius": 2
+    }
+  },
+  "Sweden": {
+    "default": {
+      "x": 347.9,
+      "y": 228.7,
+      "radius": 2
+    },
+    "zoomed-out": {
+      "x": 340,
+      "y": 202.3,
+      "radius": 2
+    }
+  },
+  "Switzerland": {
+    "default": {
+      "x": 288.7,
+      "y": 175.4,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 333.7,
+      "y": 188.3,
+      "radius": 2
+    }
+  },
+  "Ukraine": {
+    "default": {
+      "x": 323.3,
+      "y": 157.6,
+      "radius": 2.9
+    },
+    "zoomed-out": {
+      "x": 333.8,
+      "y": 183.5,
+      "radius": 2
+    }
+  },
+  "United Kingdom": {
+    "default": {
+      "x": 363.1,
+      "y": 230,
+      "radius": 2
+    },
+    "zoomed-out": {
+      "x": 343.2,
+      "y": 199.9,
+      "radius": 2
+    }
+  },
+  "Vatican City": {
+    "default": {
+      "x": 263.1,
+      "y": 246.9,
+      "radius": 4
+    },
+    "zoomed-out": {
+      "x": 336,
+      "y": 189,
+      "radius": 2
+    }
+  }
+}
