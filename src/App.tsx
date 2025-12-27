@@ -319,6 +319,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [quizStarted, setQuizStarted] = useState(false)
   const [quizFinished, setQuizFinished] = useState(false)
+  const [gaveUp, setGaveUp] = useState(false)
   const [currentQueue, setCurrentQueue] = useState<string[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [input, setInput] = useState('')
@@ -624,6 +625,7 @@ export default function App() {
     setTimeRemaining(defaultTime)
     setQuizStarted(true)
     setQuizFinished(false)
+    setGaveUp(false)
     setCorrectFlags(new Set())
     setSeenFlags(new Set([shuffled[0]]))  // First flag is immediately seen
     setResultsTab(null)
@@ -778,6 +780,7 @@ export default function App() {
 
   const giveUp = () => {
     saveCurrentAttempts()
+    setGaveUp(true)
     setQuizFinished(true)
   }
 
@@ -1202,7 +1205,7 @@ export default function App() {
         <div className="text-center mb-6">
           <p className="text-gray-500 text-sm mb-2">{quizTypeName}{practiceMode && ' (øvemodus)'}</p>
           <h1 className="text-white text-3xl font-bold mb-2">
-            {completedCount === totalFlags ? 'Gratulerer!' : !practiceMode ? 'Tiden er ute!' : 'Resultat'}
+            {completedCount === totalFlags ? 'Gratulerer!' : gaveUp ? 'Ga opp' : !practiceMode ? 'Tiden er ute!' : 'Resultat'}
           </h1>
           <p className="text-gray-400 text-xl mb-4">
             Du klarte {completedCount} av {totalFlags} {isMapQuiz(quizType) ? 'land' : 'flagg'}
