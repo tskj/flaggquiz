@@ -1440,6 +1440,9 @@ export default function App() {
                 }
               }
 
+              // All button types share same aspect ratio and size
+              const buttonClass = `${borderClass} rounded-xl overflow-hidden transition-colors duration-150 aspect-[3/2]`
+
               // Render different content based on choice type
               if (choiceType === 'flag') {
                 return (
@@ -1447,7 +1450,7 @@ export default function App() {
                     key={option}
                     onClick={() => handleCapitalChoiceClick(option)}
                     disabled={justAnswered}
-                    className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
+                    className={buttonClass}
                   >
                     <img
                       src={optionFlagUrl}
@@ -1462,9 +1465,9 @@ export default function App() {
                     key={option}
                     onClick={() => handleCapitalChoiceClick(option)}
                     disabled={justAnswered}
-                    className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36`}
+                    className={buttonClass}
                   >
-                    <PrerenderedCountryMap highlightedCountry={option} width={200} height={112} mode="overview" />
+                    <PrerenderedCountryMap highlightedCountry={option} width={200} height={133} mode="overview" />
                   </button>
                 )
               } else {
@@ -1474,7 +1477,7 @@ export default function App() {
                     key={option}
                     onClick={() => handleCapitalChoiceClick(option)}
                     disabled={justAnswered}
-                    className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 h-32 sm:h-36 bg-gray-800 hover:bg-gray-700 flex items-center justify-center`}
+                    className={`${buttonClass} bg-gray-800 hover:bg-gray-700 flex items-center justify-center`}
                   >
                     <span className="text-white font-bold text-lg">{optionName}</span>
                   </button>
