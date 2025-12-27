@@ -11,11 +11,10 @@ interface PrerenderedCountryMapProps {
   capitalCoords?: [number, number]
 }
 
-// Pre-rendered sizes available
+// Pre-rendered sizes available (must match scripts/prerenderMaps.ts SIZES)
 const PRERENDERED_SIZES = [
-  { width: 80, height: 48 },
-  { width: 120, height: 80 },
-  { width: 200, height: 112 },
+  { width: 128, height: 85 },   // Results thumbnails (w-32 with 3:2 aspect)
+  { width: 200, height: 133 },  // Capital choice quiz options (3:2 aspect)
 ]
 
 // Sanitize country name to match filename format
@@ -60,12 +59,7 @@ export function PrerenderedCountryMap({
       <img
         src={imageUrl}
         alt={highlightedCountry}
-        width={width}
-        height={height}
-        style={{
-          borderRadius: '8px',
-          display: 'block',
-        }}
+        className="w-full h-full object-cover"
         onError={() => setImageError(true)}
         loading="lazy"
       />

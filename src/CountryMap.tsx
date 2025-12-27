@@ -706,7 +706,7 @@ function CountryMapInner({
   // Early returns after all hooks
   if (loading) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c', borderRadius: '8px' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c' }}>
         <span style={{ color: '#666' }}>Laster kart...</span>
       </div>
     )
@@ -714,7 +714,7 @@ function CountryMapInner({
 
   if (error || !countries50m || !countries10m) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c', borderRadius: '8px' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c' }}>
         <span style={{ color: '#f66' }}>{error || 'Kunne ikke laste kart'}</span>
       </div>
     )
@@ -722,7 +722,7 @@ function CountryMapInner({
 
   if ((!targetFeature50m && !targetFeature10m) || !pathGenerator) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c', borderRadius: '8px' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a3a5c' }}>
         <span style={{ color: '#888' }}>Kart ikke tilgjengelig</span>
       </div>
     )
@@ -745,7 +745,6 @@ function CountryMapInner({
       viewBox={`0 0 ${width} ${height}`}
       style={{
         background: '#1a3a5c',
-        borderRadius: '8px',
         width: '100%',
         height: '100%',
         cursor: canToggleZoom ? 'pointer' : 'default'

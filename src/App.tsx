@@ -1228,7 +1228,7 @@ export default function App() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 sm:gap-8 max-w-4xl mx-auto">
             {displayFlags.map(country => {
               const isCorrect = correctFlags.has(country)
               const isStruggled = struggledFlags.has(country)
@@ -1237,10 +1237,10 @@ export default function App() {
               const flagUrl = currentFlags[country as keyof typeof currentFlags]
               const name = getQuizName(country)
 
+              // Background and text color based on result
               let bgColor = 'bg-red-900/30'
               let textColor = 'text-red-400'
               if (isUnreached) {
-                // Unreached: dark/neutral color (not red)
                 bgColor = 'bg-gray-800/50'
                 textColor = 'text-gray-500'
               } else if (isCorrect && isStruggled) {
@@ -1257,43 +1257,70 @@ export default function App() {
               return (
                 <div
                   key={country}
-                  className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
+                  className={`flex flex-col items-center rounded-lg overflow-hidden ${bgColor}`}
                 >
                   {isCapitalQuiz(quizType) ? (
                     // Capital quiz: show flag + country name + capital
                     <>
-                      <img
-                        src={flagUrl}
-                        alt={name}
-                        className="w-20 h-12 object-contain mb-1"
-                      />
-                      <span className={`text-xs text-center ${textColor}`}>
-                        {name}
-                      </span>
-                      <span className="text-xs text-gray-400 text-center">
-                        {capitalName}
-                      </span>
+                      <div className="w-full aspect-[3/2] relative">
+                        <img
+                          src={flagUrl}
+                          alt={name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="px-2 py-2 flex flex-col items-center">
+                        <span className={`text-xs text-center ${textColor}`}>
+                          {name}
+                        </span>
+                        <span className="text-xs text-gray-400 text-center">
+                          {capitalName}
+                        </span>
+                        {isStruggled && attempts && (
+                          <span className="text-xs text-gray-500 text-center mt-1">
+                            Prøvde: {attempts.join(', ')}
+                          </span>
+                        )}
+                      </div>
                     </>
                   ) : isMapQuiz(quizType) && !isKidsQuiz(quizType) ? (
-                    <div className="w-20 h-12 mb-1">
-                      <PrerenderedCountryMap highlightedCountry={country} width={80} height={48} mode="overview" />
-                    </div>
+                    // Map quiz: show map thumbnail
+                    <>
+                      <div className="w-full aspect-[3/2]">
+                        <PrerenderedCountryMap highlightedCountry={country} width={128} height={85} mode="overview" />
+                      </div>
+                      <div className="px-2 py-2 flex flex-col items-center">
+                        <span className={`text-xs text-center ${textColor}`}>
+                          {name}
+                        </span>
+                        {isStruggled && attempts && (
+                          <span className="text-xs text-gray-500 text-center mt-1">
+                            Prøvde: {attempts.map(c => getQuizName(c)).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </>
                   ) : (
-                    <img
-                      src={flagUrl}
-                      alt={name}
-                      className="w-20 h-12 object-contain mb-1"
-                    />
-                  )}
-                  {!isCapitalQuiz(quizType) && (
-                    <span className={`text-xs text-center ${textColor}`}>
-                      {name}
-                    </span>
-                  )}
-                  {isStruggled && attempts && (
-                    <span className="text-xs text-gray-500 text-center mt-1">
-                      Prøvde: {isCapitalQuiz(quizType) ? attempts.join(', ') : attempts.map(c => getQuizName(c)).join(', ')}
-                    </span>
+                    // Flag quiz: show flag
+                    <>
+                      <div className="w-full aspect-[3/2]">
+                        <img
+                          src={flagUrl}
+                          alt={name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="px-2 py-2 flex flex-col items-center">
+                        <span className={`text-xs text-center ${textColor}`}>
+                          {name}
+                        </span>
+                        {isStruggled && attempts && (
+                          <span className="text-xs text-gray-500 text-center mt-1">
+                            Prøvde: {attempts.map(c => getQuizName(c)).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )
