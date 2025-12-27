@@ -314,9 +314,8 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [input, setInput] = useState('')
   const [timeRemaining, setTimeRemaining] = useState(15 * 60)
-  const [timerEnabled, setTimerEnabled] = useState(true)
-  const [completedCount, setCompletedCount] = useState(0)
-  const [round, setRound] = useState(1)
+  const [practiceMode, setPracticeMode] = useState(false)
+  const [hasSeenAll, setHasSeenAll] = useState(false)  // Have we gone through all flags at least once?
   const [justAnswered, setJustAnswered] = useState(false)
   const [quizOrder, setQuizOrder] = useState<string[]>([])
   const [correctFlags, setCorrectFlags] = useState<Set<string>>(new Set())
@@ -326,6 +325,9 @@ export default function App() {
   const [pendingWrongMatch, setPendingWrongMatch] = useState<string | null>(null)
   const [quizType, setQuizType] = useState<QuizType>('world')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Derived state - computed during render, not via useEffect
+  const completedCount = correctFlags.size
 
   // Get the appropriate flags and names based on quiz type
   const getQuizFlags = (type: QuizType) => {
@@ -387,21 +389,21 @@ export default function App() {
       id: sessionId,
       startedAt: parseInt(sessionId),
       finishedAt: quizFinished ? Date.now() : undefined,
-      timerEnabled,
+      timerEnabled: !practiceMode,  // Storage uses timerEnabled for backwards compat
       timeRemaining,
       quizType,
       quizOrder,
       currentQueue,
       currentIndex,
       skippedFlags,
-      round,
+      round: hasSeenAll ? 2 : 1,  // Storage uses round for backwards compat
       correctFlags: Array.from(correctFlags),
       struggledFlags: Object.fromEntries(struggledFlags),
       currentAttempts,
       pendingWrongMatch,
       input,
     }
-  }, [sessionId, quizFinished, timerEnabled, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, skippedFlags, round, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
+  }, [sessionId, quizFinished, practiceMode, timeRemaining, quizType, quizOrder, currentQueue, currentIndex, skippedFlags, hasSeenAll, correctFlags, struggledFlags, currentAttempts, pendingWrongMatch, input])
 
   // Load session on mount
   useEffect(() => {
@@ -410,16 +412,15 @@ export default function App() {
       setSessionId(saved.id)
       setQuizStarted(true)
       setQuizFinished(!!saved.finishedAt)
-      setTimerEnabled(saved.timerEnabled)
+      setPracticeMode(!saved.timerEnabled)
       setTimeRemaining(saved.timeRemaining)
       setQuizType(saved.quizType || 'world')
       setQuizOrder(saved.quizOrder)
       setCurrentQueue(saved.currentQueue)
       setCurrentIndex(saved.currentIndex)
       setSkippedFlags(saved.skippedFlags)
-      setRound(saved.round)
+      setHasSeenAll(saved.round > 1)  // round > 1 means we've seen all at least once
       setCorrectFlags(new Set(saved.correctFlags))
-      setCompletedCount(saved.correctFlags.length)
       setStruggledFlags(new Map(Object.entries(saved.struggledFlags)))
       setCurrentAttempts(saved.currentAttempts)
       setPendingWrongMatch(saved.pendingWrongMatch)
@@ -442,6 +443,7 @@ export default function App() {
   }, [isLoading, sessionId, buildSession])
 
   // Move to history when quiz finishes (but keep active session for refresh)
+  // Skip for practice mode - no history tracking
   useEffect(() => {
     // Skip if already finished when loaded (already in history)
     if (wasFinishedOnLoad.current) return
@@ -451,7 +453,10 @@ export default function App() {
       const session = buildSession()
       if (session) {
         session.finishedAt = Date.now()
-        addToHistory(session)
+        // Only add to history (for highscores) if not in practice mode
+        if (!practiceMode) {
+          addToHistory(session)
+        }
         // Don't clear active session - keep it for refresh on results screen
         saveActiveSession(session)
       }
@@ -459,10 +464,10 @@ export default function App() {
     if (!quizFinished) {
       hasMovedToHistory.current = false
     }
-  }, [quizFinished, sessionId, buildSession])
+  }, [quizFinished, sessionId, buildSession, practiceMode])
 
   useEffect(() => {
-    if (!quizStarted || quizFinished || !timerEnabled) return
+    if (!quizStarted || quizFinished || practiceMode) return
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -476,14 +481,14 @@ export default function App() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [quizStarted, quizFinished, timerEnabled])
+  }, [quizStarted, quizFinished, practiceMode])
 
   useEffect(() => {
     if (quizStarted && !quizFinished && inputRef.current) {
       // preventScroll to avoid mobile keyboard pushing content out of view
       inputRef.current.focus({ preventScroll: true })
     }
-  }, [quizStarted, quizFinished, currentIndex, round])
+  }, [quizStarted, quizFinished, currentIndex, hasSeenAll])
 
 
   // Countries without map data in world-atlas (political reasons)
@@ -535,9 +540,8 @@ export default function App() {
     setQuizOrder(shuffled)
     setSkippedFlags([])
     setCurrentIndex(0)
-    setCompletedCount(0)
     setTimeRemaining(defaultTime)
-    setRound(1)
+    setHasSeenAll(false)
     setQuizStarted(true)
     setQuizFinished(false)
     setCorrectFlags(new Set())
@@ -561,7 +565,6 @@ export default function App() {
     if (justAnswered) return
     if (matchesCorrectAnswer(value)) {
       setJustAnswered(true)
-      setCompletedCount(prev => prev + 1)
       setCorrectFlags(prev => new Set(prev).add(currentCountry))
       // If we had attempts before getting it right, mark as struggled
       if (currentAttempts.length > 0) {
@@ -647,12 +650,13 @@ export default function App() {
       setCurrentIndex(currentIndex + 1)
       if (wasSkipped) setSkippedFlags(newSkipped)
     } else if (newSkipped.length > 0) {
-      // Keep original order from quizOrder for subsequent rounds
+      // We've now seen all flags at least once
+      setHasSeenAll(true)
+      // Keep original order from quizOrder for subsequent passes
       const orderedSkipped = newSkipped.sort((a, b) => quizOrder.indexOf(a) - quizOrder.indexOf(b))
       setCurrentQueue(orderedSkipped)
       setSkippedFlags([])
       setCurrentIndex(0)
-      setRound(prev => prev + 1)
     } else {
       setQuizFinished(true)
     }
@@ -729,14 +733,14 @@ export default function App() {
           className={`${color} text-white font-bold py-3 px-4 rounded-lg text-lg relative`}
         >
           {highScore && (
-            <span className={`absolute top-1 right-2 text-xs font-normal ${highScore.percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+            <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScore.percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
               ⭐ {highScore.correct}/{highScore.total}
             </span>
           )}
           {getQuizTypeName(type)}
           <span className="block text-xs font-normal opacity-80">
             {getQuizCount(type)} {baseType === 'territories' ? 'territorier' : 'land'}
-            <span className={!timerEnabled ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
+            <span className={practiceMode ? 'line-through opacity-50' : ''}> - {Math.floor(getDefaultTime(type) / 60)} min</span>
           </span>
         </button>
       )
@@ -748,11 +752,12 @@ export default function App() {
         <label className="flex items-center gap-3 mb-6 cursor-pointer">
           <input
             type="checkbox"
-            checked={!timerEnabled}
-            onChange={(e) => setTimerEnabled(!e.target.checked)}
+            checked={practiceMode}
+            onChange={(e) => setPracticeMode(e.target.checked)}
             className="w-5 h-5 rounded bg-gray-800 border-gray-600 text-blue-600 focus:ring-blue-500"
           />
-          <span className="text-gray-300">Uten tidsbegrensning</span>
+          <span className="text-gray-300">Øvemodus</span>
+          <span className="text-gray-500 text-sm">(ingen tidtaking eller highscore)</span>
         </label>
 
         <h2 className="text-gray-400 text-sm mb-2">Flagg</h2>
@@ -769,9 +774,15 @@ export default function App() {
   }
 
   if (quizFinished) {
-    const failedFlags = quizOrder.filter(country => !correctFlags.has(country))
+    // Calculate which flags were never reached (still in queue after current position when quiz ended)
+    // But exclude skipped flags - those were seen and should show as red, not gray
+    const unreachedFlags = new Set(
+      currentQueue.slice(currentIndex + 1).filter(f => !skippedFlags.includes(f))
+    )
+
+    const failedFlags = quizOrder.filter(country => !correctFlags.has(country) && !unreachedFlags.has(country))
     const struggledOnly = quizOrder.filter(country => correctFlags.has(country) && struggledFlags.has(country))
-    // Show failed and struggled flags in quiz order
+    // Show failed, struggled, and unreached flags in quiz order
     const problemFlags = quizOrder.filter(country =>
       !correctFlags.has(country) || struggledFlags.has(country)
     )
@@ -781,12 +792,12 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col p-4" style={{ background: 'radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%)' }}>
         <div className="text-center mb-6">
-          <p className="text-gray-500 text-sm mb-2">{quizTypeName}</p>
+          <p className="text-gray-500 text-sm mb-2">{quizTypeName}{practiceMode && ' (øvemodus)'}</p>
           <h1 className="text-white text-3xl font-bold mb-2">
-            {completedCount === totalFlags ? 'Gratulerer!' : timerEnabled ? 'Tiden er ute!' : 'Resultat'}
+            {completedCount === totalFlags ? 'Gratulerer!' : !practiceMode ? 'Tiden er ute!' : 'Resultat'}
           </h1>
           <p className="text-gray-400 text-xl mb-4">
-            Du klarte {completedCount} av {totalFlags} flagg
+            Du klarte {completedCount} av {totalFlags} {isMapQuiz(quizType) ? 'land' : 'flagg'}
           </p>
           <div className="flex gap-3 justify-center">
             <button
@@ -809,7 +820,7 @@ export default function App() {
             onClick={() => setShowAllResults(false)}
             className={`px-4 py-2 rounded-l-lg ${!showAllResults ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
           >
-            Feil ({failedFlags.length}){struggledOnly.length > 0 && ` + ${struggledOnly.length} slitt`}
+            Feil ({failedFlags.length + unreachedFlags.size}){struggledOnly.length > 0 && ` + ${struggledOnly.length} slitt`}
           </button>
           <button
             onClick={() => setShowAllResults(true)}
@@ -824,13 +835,18 @@ export default function App() {
             {displayFlags.map(country => {
               const isCorrect = correctFlags.has(country)
               const isStruggled = struggledFlags.has(country)
+              const isUnreached = unreachedFlags.has(country)
               const attempts = struggledFlags.get(country)
               const flagUrl = currentFlags[country as keyof typeof currentFlags]
               const name = getQuizName(country)
 
               let bgColor = 'bg-red-900/30'
               let textColor = 'text-red-400'
-              if (isCorrect && isStruggled) {
+              if (isUnreached) {
+                // Unreached: dark/neutral color (not red)
+                bgColor = 'bg-gray-800/50'
+                textColor = 'text-gray-500'
+              } else if (isCorrect && isStruggled) {
                 bgColor = 'bg-yellow-900/30'
                 textColor = 'text-yellow-400'
               } else if (isCorrect) {
@@ -872,23 +888,43 @@ export default function App() {
   }
 
   const flagUrl = currentFlags[currentCountry as keyof typeof currentFlags]
-  const remainingInRound = currentQueue.length - currentIndex - 1
+  // Count inclusive of current flag
+  const remainingIncludingCurrent = currentQueue.length - currentIndex
   const skippedCount = skippedFlags.length
   const quizTypeName = getQuizTypeName(quizType)
+
+  // Build the remaining text (used before hasSeenAll)
+  const remainingText = remainingIncludingCurrent === 1 ? 'Siste!' : `${remainingIncludingCurrent} igjen`
 
   return (
     <div className="min-h-screen flex flex-col p-2 sm:p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
       <div className="flex-1 flex flex-col items-center pt-1 sm:pt-4 lg:pt-8">
         <div className="w-full max-w-xs sm:max-w-sm lg:max-w-lg mb-1 sm:mb-2">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-white text-lg sm:text-xl lg:text-2xl font-mono">{timerEnabled ? formatTime(timeRemaining) : '∞'}</span>
-            <span className="text-green-500 text-base sm:text-lg lg:text-xl font-bold">{completedCount} riktige</span>
+            {!practiceMode && <span className="text-white text-lg sm:text-xl lg:text-2xl font-mono">{formatTime(timeRemaining)}</span>}
+            <span className={`text-green-500 text-base sm:text-lg lg:text-xl font-bold ${practiceMode ? 'ml-auto' : ''}`}>{completedCount} riktige</span>
           </div>
           <div className="flex justify-between items-center text-xs sm:text-sm lg:text-base">
-            <span className="text-gray-500">{quizTypeName} - Runde {round}</span>
+            <span className="text-gray-500">{quizTypeName}</span>
             <div className="flex gap-2 sm:gap-4">
-              <span className="text-gray-400">{remainingInRound} igjen</span>
-              <span className="text-yellow-500">{skippedCount} hoppet over</span>
+              {hasSeenAll ? (
+                // After seeing all, show total bucket size (remaining + already skipped this pass)
+                (() => {
+                  const totalBucket = remainingIncludingCurrent + skippedCount
+                  return (
+                    <span className={totalBucket === 1 ? 'text-yellow-400 font-bold' : 'text-yellow-500'}>
+                      {totalBucket === 1 ? 'Siste!' : `${totalBucket} hoppet over`}
+                    </span>
+                  )
+                })()
+              ) : (
+                <>
+                  <span className={remainingIncludingCurrent === 1 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>{remainingText}</span>
+                  {skippedCount > 0 && (
+                    <span className="text-yellow-500">{skippedCount} hoppet over</span>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
