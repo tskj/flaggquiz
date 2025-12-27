@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import countryFlags from '../country-flags.json'
 import territoryFlags from '../disputed-territories.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
-import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
 import { CountryMap, preloadMapData } from './CountryMap'
 import { getQuizOptions } from './kidsQuizData'
 
@@ -371,8 +371,11 @@ export default function App() {
   }
 
   const getQuizTypeName = (type: QuizType): string => {
-    if (isKidsQuiz(type)) {
+    if (isKidsFlagQuiz(type)) {
       return 'Europeiske flagg'
+    }
+    if (isKidsMapQuiz(type)) {
+      return 'Europeiske land'
     }
     const baseType = getBaseQuizType(type)
     const prefix = isMapQuiz(type) ? 'Kart: ' : ''
@@ -434,7 +437,7 @@ export default function App() {
       setSessionId(saved.id)
       setQuizStarted(true)
       setQuizFinished(!!saved.finishedAt)
-      setKidsMode(saved.kidsMode || false)
+      setKidsMode(saved.kidsMode || isKidsQuiz(saved.quizType || 'world'))
       setPracticeMode(!saved.timerEnabled)
       setTimeRemaining(saved.timeRemaining)
       setQuizType(saved.quizType || 'world')
@@ -561,15 +564,24 @@ export default function App() {
     }
   }
 
-  const startQuiz = (type: QuizType = 'world', isKidsMode: boolean = false) => {
+  const startQuiz = (type: QuizType = 'world') => {
     clearActiveSession()
-    const allCountries = isKidsMode ? europeanCountries.filter(c => c in countryFlags) : getCountriesForType(type)
+    const isKids = isKidsQuiz(type)
+    // For kids quizzes, use European countries (filter out Kosovo for map quiz)
+    let allCountries: string[]
+    if (isKidsFlagQuiz(type)) {
+      allCountries = europeanCountries.filter(c => c in countryFlags)
+    } else if (isKidsMapQuiz(type)) {
+      allCountries = europeanCountries.filter(c => c in countryFlags && !countriesWithoutMapData.includes(c))
+    } else {
+      allCountries = getCountriesForType(type)
+    }
     const shuffled = shuffleArray(allCountries)
     const newSessionId = Date.now().toString()
-    const defaultTime = isKidsMode ? 15 * 60 : getDefaultTime(type)  // 15 min for kids (generous)
+    const defaultTime = isKids ? 15 * 60 : getDefaultTime(type)  // 15 min for kids (generous)
     setSessionId(newSessionId)
-    setQuizType(isKidsMode ? 'kids-europe' : type)
-    setKidsMode(isKidsMode)
+    setQuizType(type)
+    setKidsMode(isKids)
     setPracticeMode(false)  // Kids mode is NOT practice mode - we track highscores
     setCurrentQueue(shuffled)
     setQuizOrder(shuffled)
@@ -585,7 +597,7 @@ export default function App() {
     setInput('')
     setSelectedOption(null)
     // Generate options for first question in kids mode
-    if (isKidsMode && shuffled.length > 0) {
+    if (isKids && shuffled.length > 0) {
       setCurrentOptions(getQuizOptions(shuffled[0]))
     }
   }
@@ -881,19 +893,33 @@ export default function App() {
         <h1 className="text-white text-3xl font-bold mb-6 text-center">Flaggquiz</h1>
 
         {/* Kids mode section */}
-        <h2 className="text-gray-400 text-sm mb-2">For barn</h2>
-        <button
-          onClick={() => startQuiz('europe', true)}
-          className="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-6 rounded-lg text-lg mb-6 shadow-lg relative"
-        >
-          {highScores['kids-europe'] && (
-            <span className={`absolute top-1 right-2 text-xs font-normal ${highScores['kids-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
-              ⭐ {highScores['kids-europe'].correct}/{highScores['kids-europe'].total}
-            </span>
-          )}
-          Europeiske flagg
-          <span className="block text-sm font-normal opacity-90">{europeanCountries.length} land - 15 min</span>
-        </button>
+        <h2 className="text-gray-400 text-sm mb-2">For alle</h2>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
+          <button
+            onClick={() => startQuiz('kids-europe')}
+            className="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['kids-europe'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${highScores['kids-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['kids-europe'].correct}/{highScores['kids-europe'].total}
+              </span>
+            )}
+            Europas flagg
+            <span className="block text-sm font-normal opacity-90">{europeanCountries.length} land - 15 min</span>
+          </button>
+          <button
+            onClick={() => startQuiz('kids-map-europe')}
+            className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['kids-map-europe'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${highScores['kids-map-europe'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['kids-map-europe'].correct}/{highScores['kids-map-europe'].total}
+              </span>
+            )}
+            Europas land
+            <span className="block text-sm font-normal opacity-90">{getQuizCount('kids-map-europe')} land - 15 min</span>
+          </button>
+        </div>
 
         <label className="flex items-center gap-3 mb-6 cursor-pointer">
           <input
@@ -954,7 +980,7 @@ export default function App() {
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => startQuiz(quizType, kidsMode)}
+              onClick={() => startQuiz(quizType)}
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
             >
               Prøv igjen
@@ -1018,7 +1044,7 @@ export default function App() {
                   key={country}
                   className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
                 >
-                  {isMapQuiz(quizType) ? (
+                  {isMapQuiz(quizType) && !isKidsQuiz(quizType) ? (
                     <div className="w-20 h-12 mb-1">
                       <CountryMap highlightedCountry={country} width={80} height={48} mode="overview" />
                     </div>
@@ -1089,7 +1115,15 @@ export default function App() {
           </div>
         </div>
 
-        {isMapQuiz(quizType) ? (
+        {isKidsMapQuiz(quizType) ? (
+          /* Kids map quiz: Map + country name as question */
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4">
+            <div className="aspect-video mb-2">
+              <CountryMap highlightedCountry={currentCountry} width={512} height={288} />
+            </div>
+            <p className="text-white text-xl sm:text-2xl font-bold text-center">{correctAnswer}</p>
+          </div>
+        ) : isMapQuiz(quizType) ? (
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg aspect-video mb-2 sm:mb-4">
             <CountryMap highlightedCountry={currentCountry} width={512} height={288} allowZoomToggle={practiceMode} onMapClick={() => inputRef.current?.focus()} />
           </div>
@@ -1101,11 +1135,47 @@ export default function App() {
           />
         )}
 
-        {kidsMode ? (
-          /* Kids mode: Multiple choice buttons */
+        {isKidsMapQuiz(quizType) ? (
+          /* Kids map quiz: Flag options (2x2 grid) */
+          <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-2 gap-3">
+            {currentOptions.filter(opt => opt in countryFlags).map((option) => {
+              const optionFlagUrl = countryFlags[option as keyof typeof countryFlags]
+              const isSelected = selectedOption === option
+              const isCorrectOption = option === currentCountry
+              const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
+
+              let borderClass = 'border-4 border-gray-500 hover:border-gray-300'
+              if (justAnswered) {
+                if (isSelected && isCorrectOption) {
+                  borderClass = 'border-4 border-green-400'
+                } else if (isSelected && !isCorrectOption) {
+                  borderClass = 'border-4 border-red-400'
+                } else if (wasWrongAnswer && isCorrectOption) {
+                  borderClass = 'border-4 border-green-400'
+                }
+              }
+
+              return (
+                <button
+                  key={option}
+                  onClick={() => handleKidsOptionClick(option)}
+                  disabled={justAnswered}
+                  className={`${borderClass} rounded-xl overflow-hidden transition-colors duration-150 bg-gray-700 p-2`}
+                >
+                  <img
+                    src={optionFlagUrl}
+                    alt="Flagg"
+                    className="w-full h-20 sm:h-24 object-contain"
+                  />
+                </button>
+              )
+            })}
+          </div>
+        ) : isKidsFlagQuiz(quizType) ? (
+          /* Kids flag quiz: Text buttons */
           <div className="w-full max-w-[95vw] sm:max-w-sm lg:max-w-lg mb-2 sm:mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {currentOptions.map((option) => {
-              const optionName = norwegianNames[option] || option
+            {currentOptions.filter(opt => opt in countryFlags && opt in norwegianNames).map((option) => {
+              const optionName = norwegianNames[option]
               const isSelected = selectedOption === option
               const isCorrectOption = option === currentCountry
               const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
@@ -1181,7 +1251,7 @@ export default function App() {
             Gi opp
           </button>
           <button
-            onClick={() => startQuiz(quizType, kidsMode)}
+            onClick={() => startQuiz(quizType)}
             className="text-gray-500 hover:text-gray-400 text-xs sm:text-sm underline"
           >
             Start på nytt

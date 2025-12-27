@@ -4,12 +4,15 @@ import { z } from 'zod'
 export type QuizType =
   | 'world' | 'europe' | 'africa' | 'asia' | 'north-america' | 'south-america' | 'oceania' | 'territories'
   | 'map-world' | 'map-europe' | 'map-africa' | 'map-asia' | 'map-north-america' | 'map-south-america' | 'map-oceania' | 'map-territories'
-  | 'kids-europe'
+  | 'kids-europe' | 'kids-map-europe'
 
-export const isMapQuiz = (type: QuizType): boolean => type.startsWith('map-')
+export const isMapQuiz = (type: QuizType): boolean => type.startsWith('map-') || type === 'kids-map-europe'
 export const isKidsQuiz = (type: QuizType): boolean => type.startsWith('kids-')
+export const isKidsFlagQuiz = (type: QuizType): boolean => type === 'kids-europe'
+export const isKidsMapQuiz = (type: QuizType): boolean => type === 'kids-map-europe'
 export const getBaseQuizType = (type: QuizType): QuizType =>
   type.startsWith('map-') ? type.replace('map-', '') as QuizType :
+  type === 'kids-map-europe' ? 'europe' as QuizType :
   type.startsWith('kids-') ? type.replace('kids-', '') as QuizType : type
 
 // Schema for a single quiz session
@@ -22,7 +25,7 @@ export const QuizSessionSchema = z.object({
   quizType: z.enum([
     'world', 'europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania', 'territories',
     'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania', 'map-territories',
-    'kids-europe'
+    'kids-europe', 'kids-map-europe'
   ]).default('world'),
 
   // Quiz configuration
@@ -133,6 +136,7 @@ export function getHighScores(): Record<QuizType, HighScore | null> {
     'map-oceania': null,
     'map-territories': null,
     'kids-europe': null,
+    'kids-map-europe': null,
   }
 
   for (const session of history.sessions) {
