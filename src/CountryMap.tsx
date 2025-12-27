@@ -268,8 +268,8 @@ function CountryMapInner({
   mode = 'quiz',
   allowZoomToggle = true,
 }: CountryMapProps) {
-  // Quiz mode shows neighbors (zoom out), overview zooms in on the country
-  const baseZoomFactor = mode === 'overview' ? 3.5 : 0.5
+  // Quiz mode shows neighbors (zoom out), overview fits country to box
+  const baseZoomFactor = mode === 'overview' ? 1.0 : 0.5
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
@@ -324,9 +324,15 @@ function CountryMapInner({
   )
 
   // Split country into main polygon and distant insets (overseas territories)
-  // Use 10m data when available for more accurate bounds (important for island nations like Maldives)
+  // Use 10m data for quiz mode (more accurate for island nations like Maldives)
+  // Use 50m data for overview/thumbnail mode (simpler, better for small displays)
   const polygonParts = useMemo(() => {
-    // Prefer 10m data for polygon parts - it's more accurate for island nations
+    // For overview mode (thumbnails), use simpler 50m data
+    if (mode === 'overview') {
+      if (!targetFeature50m) return null
+      return getPolygonParts(targetFeature50m)
+    }
+    // For quiz mode, prefer 10m data - it's more accurate for island nations
     if (targetFeature10m) {
       const bounds = geoBounds(targetFeature10m)
       const lngSpan = bounds[1][0] - bounds[0][0]
@@ -338,7 +344,7 @@ function CountryMapInner({
     }
     if (!targetFeature50m) return null
     return getPolygonParts(targetFeature50m)
-  }, [targetFeature50m, targetFeature10m])
+  }, [targetFeature50m, targetFeature10m, mode])
 
   // Check if this country has insets
   const hasInsets = !forceNoInsets && polygonParts?.insets && polygonParts.insets.length > 0
@@ -354,7 +360,8 @@ function CountryMapInner({
   const { pathGenerator, projectionScale, projection } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000, projection: null }
 
-    const paddingPx = 10  // Reduced padding to use more screen space
+    // Use smaller padding for thumbnails (overview mode)
+    const paddingPx = mode === 'overview' ? 4 : 10
 
     // Get the main polygon's area for filtering
     const mainArea = geoArea(polygonParts.nearbyPolygons[0])
@@ -402,7 +409,7 @@ function CountryMapInner({
     proj.translate([width / 2, height / 2])
 
     return { pathGenerator: geoPath(proj), projectionScale: finalScale, projection: proj }
-  }, [polygonParts, width, height, zoomFactor, showInsets, useGlobalZoom])
+  }, [polygonParts, width, height, zoomFactor, showInsets, useGlobalZoom, mode])
 
   const neighborPaths = useMemo(() => {
     if (!countries50m || !pathGenerator) return []
