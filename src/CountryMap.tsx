@@ -1,9 +1,87 @@
 import { useEffect, useState, useMemo, memo } from 'react'
-import { geoPath, geoMercator, geoCentroid, geoBounds } from 'd3-geo'
+import { geoPath, geoMercator, geoCentroid, geoBounds, geoArea } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { Topology, GeometryCollection } from 'topojson-specification'
-import type { FeatureCollection, Feature, Geometry } from 'geojson'
+import type { FeatureCollection, Feature, Geometry, Polygon } from 'geojson'
 import { countryToISO } from './countryISOCodes'
+
+interface PolygonParts {
+  mainForProjection: Feature<Polygon>  // Largest polygon, used for projection bounds
+  nearbyPolygons: Feature<Polygon>[]   // All polygons to render in main view (includes main + nearby islands)
+  insets: Feature<Polygon>[]           // Distant territories for inset boxes
+}
+
+// Extract polygons into: main (for projection), nearby (for main view), and insets (for boxes)
+function getPolygonParts(feat: Feature<Geometry>): PolygonParts {
+  const geom = feat.geometry
+  if (geom.type === 'Polygon') {
+    return {
+      mainForProjection: feat as Feature<Polygon>,
+      nearbyPolygons: [feat as Feature<Polygon>],
+      insets: []
+    }
+  }
+  if (geom.type === 'MultiPolygon') {
+    // Calculate area for each polygon
+    const polygons: { poly: Feature<Polygon>; area: number }[] = geom.coordinates.map(coords => {
+      const poly: Feature<Polygon> = {
+        type: 'Feature',
+        properties: feat.properties,
+        geometry: { type: 'Polygon', coordinates: coords }
+      }
+      return { poly, area: geoArea(poly) }
+    })
+
+    // Sort by area descending
+    polygons.sort((a, b) => b.area - a.area)
+
+    const mainForProjection = polygons[0].poly
+    const mainArea = polygons[0].area
+
+    // Add moderate padding to main bounds (3° in each direction)
+    // This keeps nearby islands like Lofoten with mainland, but separates truly distant territories
+    const mainBounds = geoBounds(mainForProjection)
+    const paddedBounds = {
+      minLng: mainBounds[0][0] - 3,
+      minLat: mainBounds[0][1] - 3,
+      maxLng: mainBounds[1][0] + 3,
+      maxLat: mainBounds[1][1] + 3,
+    }
+
+    const nearbyPolygons: Feature<Polygon>[] = [mainForProjection]
+    const insets: Feature<Polygon>[] = []
+
+    for (let i = 1; i < polygons.length; i++) {
+      const { poly, area } = polygons[i]
+      const bounds = geoBounds(poly)
+
+      // Check if polygon is completely outside the padded main bounds
+      const isDistant =
+        bounds[1][0] < paddedBounds.minLng || // Entirely west of padded main
+        bounds[0][0] > paddedBounds.maxLng || // Entirely east of padded main
+        bounds[1][1] < paddedBounds.minLat || // Entirely south of padded main
+        bounds[0][1] > paddedBounds.maxLat    // Entirely north of padded main
+
+      if (isDistant) {
+        // Only include in insets if significant (at least 0.5% of main area)
+        if (area >= mainArea * 0.005) {
+          insets.push(poly)
+        }
+      } else {
+        // Nearby - include in main view rendering
+        nearbyPolygons.push(poly)
+      }
+    }
+
+    return { mainForProjection, nearbyPolygons, insets }
+  }
+  // Fallback
+  return {
+    mainForProjection: feat as Feature<Polygon>,
+    nearbyPolygons: [feat as Feature<Polygon>],
+    insets: []
+  }
+}
 
 // TopoJSON from world-atlas
 const TOPOJSON_URL_50M = 'https://unpkg.com/world-atlas@2.0.2/countries-50m.json'
@@ -92,15 +170,22 @@ function CountryMapInner({
     [countries10m, targetISO]
   )
 
-  const { pathGenerator, projectionScale } = useMemo(() => {
-    if (!targetFeature50m) return { pathGenerator: null, projectionScale: 1000 }
+  // Split country into main polygon and distant insets (overseas territories)
+  const polygonParts = useMemo(() => {
+    if (!targetFeature50m) return null
+    return getPolygonParts(targetFeature50m)
+  }, [targetFeature50m])
 
-    const center = geoCentroid(targetFeature50m)
+  const { pathGenerator, projectionScale } = useMemo(() => {
+    if (!polygonParts) return { pathGenerator: null, projectionScale: 1000 }
+
+    // Use largest polygon for projection (handles countries with overseas territories)
+    const center = geoCentroid(polygonParts.mainForProjection)
     const paddingPx = 20
     const projection = geoMercator()
       .fitExtent(
         [[paddingPx, paddingPx], [width - paddingPx, height - paddingPx]],
-        targetFeature50m
+        polygonParts.mainForProjection
       )
 
     const currentScale = projection.scale()
@@ -110,7 +195,7 @@ function CountryMapInner({
     projection.translate([width / 2, height / 2])
 
     return { pathGenerator: geoPath(projection), projectionScale: finalScale }
-  }, [targetFeature50m, width, height, zoomFactor])
+  }, [polygonParts, width, height, zoomFactor])
 
   const neighborPaths = useMemo(() => {
     if (!countries50m || !pathGenerator) return []
@@ -126,23 +211,125 @@ function CountryMapInner({
       .filter(Boolean) as { key: string; d: string }[]
   }, [countries50m, targetISO, pathGenerator])
 
-  const targetPath = useMemo(() => {
-    if (!pathGenerator || !targetFeature50m) return ''
+  const targetPaths = useMemo(() => {
+    if (!pathGenerator || !polygonParts) return []
 
-    // Check if 10m feature has degenerate geometry (e.g., Vatican in world-atlas)
-    let featureToRender = targetFeature50m
+    // Determine if we should use 10m data
+    let use10m = false
+    let parts10m: PolygonParts | null = null
     if (targetFeature10m) {
       const bounds = geoBounds(targetFeature10m)
       const lngSpan = bounds[1][0] - bounds[0][0]
       const latSpan = bounds[1][1] - bounds[0][1]
       // Only use 10m if it has meaningful extent (> 0.001 degrees in both dimensions)
       if (lngSpan > 0.001 && latSpan > 0.001) {
-        featureToRender = targetFeature10m
+        use10m = true
+        parts10m = getPolygonParts(targetFeature10m)
       }
     }
 
-    return pathGenerator(featureToRender) || ''
-  }, [pathGenerator, targetFeature10m, targetFeature50m])
+    // Render all nearby polygons (mainland + nearby islands like Lofoten)
+    const polygonsToRender = use10m && parts10m ? parts10m.nearbyPolygons : polygonParts.nearbyPolygons
+    return polygonsToRender
+      .map((poly, i) => ({ key: `target-${i}`, d: pathGenerator(poly) || '' }))
+      .filter(p => p.d)
+  }, [pathGenerator, targetFeature10m, polygonParts])
+
+  // Calculate inset boxes for overseas territories (only in quiz mode)
+  const insetBoxes = useMemo(() => {
+    if (!polygonParts || polygonParts.insets.length === 0 || mode === 'overview') return []
+
+    const boxSize = { w: 50, h: 35 }
+    const padding = 6
+
+    // Get mainland centroid for direction calculation
+    const mainCentroid = geoCentroid(polygonParts.mainForProjection)
+
+    // Group insets by direction (N, S, E, W, NE, NW, SE, SW)
+    type Direction = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+    const directionCounts: Record<Direction, number> = { n: 0, s: 0, e: 0, w: 0, ne: 0, nw: 0, se: 0, sw: 0 }
+
+    return polygonParts.insets.map((inset) => {
+      const insetCentroid = geoCentroid(inset)
+
+      // Calculate direction from main to inset
+      const dLng = insetCentroid[0] - mainCentroid[0]
+      const dLat = insetCentroid[1] - mainCentroid[1]
+
+      // Determine primary direction
+      let direction: Direction
+      const absLng = Math.abs(dLng)
+      const absLat = Math.abs(dLat)
+
+      if (absLat > absLng * 2) {
+        // Primarily north/south
+        direction = dLat > 0 ? 'n' : 's'
+      } else if (absLng > absLat * 2) {
+        // Primarily east/west
+        direction = dLng > 0 ? 'e' : 'w'
+      } else {
+        // Diagonal
+        if (dLat > 0 && dLng > 0) direction = 'ne'
+        else if (dLat > 0 && dLng < 0) direction = 'nw'
+        else if (dLat < 0 && dLng > 0) direction = 'se'
+        else direction = 'sw'
+      }
+
+      // Get position index for this direction (for multiple insets in same direction)
+      const posIndex = directionCounts[direction]++
+
+      // Calculate position based on direction
+      let x: number, y: number
+      const offset = posIndex * (boxSize.w + 4)
+
+      switch (direction) {
+        case 'n':
+          x = width / 2 - boxSize.w / 2 + offset
+          y = padding
+          break
+        case 's':
+          x = width / 2 - boxSize.w / 2 + offset
+          y = height - padding - boxSize.h
+          break
+        case 'e':
+          x = width - padding - boxSize.w
+          y = height / 2 - boxSize.h / 2 + offset
+          break
+        case 'w':
+          x = padding
+          y = height / 2 - boxSize.h / 2 + offset
+          break
+        case 'ne':
+          x = width - padding - boxSize.w - offset
+          y = padding
+          break
+        case 'nw':
+          x = padding + offset
+          y = padding
+          break
+        case 'se':
+          x = width - padding - boxSize.w - offset
+          y = height - padding - boxSize.h
+          break
+        case 'sw':
+        default:
+          x = padding + offset
+          y = height - padding - boxSize.h
+          break
+      }
+
+      // Create a projection for this inset
+      const insetProjection = geoMercator()
+        .fitExtent(
+          [[2, 2], [boxSize.w - 2, boxSize.h - 2]],
+          inset
+        )
+      const insetPath = geoPath(insetProjection)
+      const d = insetPath(inset) || ''
+
+      return { x, y, w: boxSize.w, h: boxSize.h, d, key: `inset-${direction}-${posIndex}` }
+    })
+  }, [polygonParts, width, height, mode])
 
   // Calculate stroke width based on projection scale
   // Low scale (zoomed out) = thinner strokes, high scale (zoomed in) = normal strokes
@@ -198,10 +385,33 @@ function CountryMapInner({
         />
       ))}
       {/* Render target country on top (10m for high detail) */}
-      <path
-        d={targetPath}
-        fill="#4ade80"
-      />
+      {targetPaths.map(({ key, d }) => (
+        <path
+          key={key}
+          d={d}
+          fill="#4ade80"
+        />
+      ))}
+
+      {/* Render inset boxes for overseas territories */}
+      {insetBoxes.map(({ x, y, w, h, d, key }) => (
+        <g key={key} transform={`translate(${x}, ${y})`}>
+          {/* Box background */}
+          <rect
+            width={w}
+            height={h}
+            fill="#1a3a5c"
+            stroke="#4ade80"
+            strokeWidth={1}
+            rx={2}
+          />
+          {/* Territory shape */}
+          <path
+            d={d}
+            fill="#4ade80"
+          />
+        </g>
+      ))}
     </svg>
   )
 }
