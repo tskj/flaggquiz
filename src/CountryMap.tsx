@@ -197,6 +197,7 @@ function CountryMapInner({
   const [data, setData] = useState(cachedData)
   const [loading, setLoading] = useState(!cachedData)
   const [error, setError] = useState<string | null>(null)
+  const [showInsets, setShowInsets] = useState(true)
 
   // Load data (uses cache if available)
   useEffect(() => {
@@ -239,6 +240,8 @@ function CountryMapInner({
     return getPolygonParts(targetFeature50m)
   }, [targetFeature50m])
 
+  const hasInsets = polygonParts?.insets && polygonParts.insets.length > 0
+
   const { pathGenerator, projectionScale, projection } = useMemo(() => {
     if (!polygonParts) return { pathGenerator: null, projectionScale: 1000, projection: null }
 
@@ -247,9 +250,15 @@ function CountryMapInner({
     // Get the main polygon's area for filtering
     const mainArea = geoArea(polygonParts.nearbyPolygons[0])
 
+    // When insets are hidden, include ALL polygons (nearby + insets) for centering/fitting
+    // When insets are shown, only use nearby polygons
+    const allPolygons = showInsets
+      ? polygonParts.nearbyPolygons
+      : [...polygonParts.nearbyPolygons, ...polygonParts.insets]
+
     // Filter to only significant polygons (at least 1% of main area) for centering/fitting
     // This prevents tiny islands from stretching the bounding box too much
-    const significantPolygons = polygonParts.nearbyPolygons.filter(p =>
+    const significantPolygons = allPolygons.filter(p =>
       geoArea(p) >= mainArea * 0.01
     )
 
@@ -282,7 +291,7 @@ function CountryMapInner({
     proj.translate([width / 2, height / 2])
 
     return { pathGenerator: geoPath(proj), projectionScale: finalScale, projection: proj }
-  }, [polygonParts, width, height, zoomFactor])
+  }, [polygonParts, width, height, zoomFactor, showInsets])
 
   const neighborPaths = useMemo(() => {
     if (!countries50m || !pathGenerator) return []
@@ -316,17 +325,20 @@ function CountryMapInner({
     }
 
     // Render all nearby polygons (mainland + nearby islands like Lofoten)
-    // The rotated projection handles date-line crossing automatically
-    const polygonsToRender = use10m && parts10m ? parts10m.nearbyPolygons : polygonParts.nearbyPolygons
+    // When insets are hidden, also render the inset polygons in the main view
+    const baseParts = use10m && parts10m ? parts10m : polygonParts
+    const polygonsToRender = showInsets
+      ? baseParts.nearbyPolygons
+      : [...baseParts.nearbyPolygons, ...baseParts.insets]
 
     return polygonsToRender
       .map((poly, i) => ({ key: `target-${i}`, d: pathGenerator(poly) || '' }))
       .filter(p => p.d)
-  }, [pathGenerator, targetFeature10m, polygonParts])
+  }, [pathGenerator, targetFeature10m, polygonParts, showInsets])
 
-  // Calculate inset boxes for overseas territories (only in quiz mode)
+  // Calculate inset boxes for overseas territories (only in quiz mode, and only when showInsets is true)
   const insetBoxes = useMemo(() => {
-    if (!polygonParts || !projection || polygonParts.insets.length === 0 || mode === 'overview') return []
+    if (!polygonParts || !projection || polygonParts.insets.length === 0 || mode === 'overview' || !showInsets) return []
 
     const boxSize = { w: 50, h: 35 }
     const padding = 0  // Glued to the edge
@@ -499,7 +511,7 @@ function CountryMapInner({
 
       return { x, y, w: clampedWidth, h: clampedHeight, d, key: `inset-${index}`, touchesLeft, touchesTop, touchesRight, touchesBottom }
     })
-  }, [polygonParts, projection, projectionScale, width, height, mode])
+  }, [polygonParts, projection, projectionScale, width, height, mode, showInsets])
 
   // Calculate stroke width based on projection scale
   // Low scale (zoomed out) = thinner strokes, high scale (zoomed in) = normal strokes
@@ -535,11 +547,21 @@ function CountryMapInner({
     )
   }
 
+  // Toggle insets on click (only if there are insets)
+  const handleClick = hasInsets ? () => setShowInsets(prev => !prev) : undefined
+
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      style={{ background: '#1a3a5c', borderRadius: '8px', width: '100%', height: '100%' }}
+      style={{
+        background: '#1a3a5c',
+        borderRadius: '8px',
+        width: '100%',
+        height: '100%',
+        cursor: hasInsets ? 'pointer' : 'default'
+      }}
       preserveAspectRatio="xMidYMid meet"
+      onClick={handleClick}
     >
       {/* Ocean background */}
       <rect width={width} height={height} fill="#1a3a5c" />
@@ -607,6 +629,20 @@ function CountryMapInner({
           </g>
         )
       })}
+
+      {/* Hint text for toggling insets (only in quiz mode, not overview) */}
+      {hasInsets && mode !== 'overview' && (
+        <text
+          x={width - 6}
+          y={height - 6}
+          textAnchor="end"
+          fill="#ffffff40"
+          fontSize="10"
+          style={{ pointerEvents: 'none' }}
+        >
+          {showInsets ? 'Klikk for å zoome ut' : 'Klikk for å zoome inn'}
+        </text>
+      )}
     </svg>
   )
 }
