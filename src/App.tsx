@@ -2,12 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import localCountryFlags from './localFlags.json'
 import localTerritoryFlags from './localTerritoryFlags.json'
 import { checkAnswer as matchAnswer, isStrictMatch } from './fuzzyMatch'
-import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
+import { loadActiveSession, saveActiveSession, clearActiveSession, addToHistory, getHighScores, isMapQuiz, isKidsQuiz, isKidsFlagQuiz, isKidsMapQuiz, isCapitalQuiz, isCapitalInputQuiz, isCapitalChoiceQuiz, isSeaQuiz, isSeaTypingQuiz, isSeaChoiceQuiz, getBaseQuizType, type QuizSession, type QuizType } from './storage'
 import { preloadMapData } from './CountryMap'
 import { PrerenderedCountryMap } from './PrerenderedCountryMap'
 import { getQuizOptions } from './kidsQuizData'
 import { europeanCapitals, getCapitalAlternatives, capitalCoordinates } from './europeanCapitals'
 import { getFlagFocalPoint } from './flagFocalPoints'
+import { seas, seaAlternativeNames, getSeaQuizOptions } from './seasData'
+import { PrerenderedSeaMap } from './PrerenderedSeaMap'
 
 // Start preloading map data immediately
 preloadMapData()
@@ -377,6 +379,10 @@ export default function App() {
   const countriesWithSameCapital = ['Luxembourg', 'Monaco', 'San Marino', 'Vatican City']
 
   const getQuizCount = (type: QuizType): number => {
+    // Sea quizzes
+    if (isSeaQuiz(type)) {
+      return seas.length
+    }
     // Capital quizzes - filter out countries without map data and trivial same-name capitals
     if (type === 'capital-input-europe') {
       return europeanCountries.filter(c => c in europeanCapitals && !countriesWithoutMapData.includes(c) && !countriesWithSameCapital.includes(c)).length
@@ -405,6 +411,8 @@ export default function App() {
     if (type === 'kids-map-world') return 'Verdens land'
     if (type === 'capital-input-europe') return 'Hovedsteder (skriv)'
     if (type === 'capital-choice-europe') return 'Hovedsteder (flervalg)'
+    if (type === 'seas-typing') return 'Alle verdens hav (skriv)'
+    if (type === 'seas-choice') return 'Alle verdens hav (flervalg)'
     const baseType = getBaseQuizType(type)
     const prefix = isMapQuiz(type) ? 'Kart: ' : ''
     switch (baseType) {
@@ -639,6 +647,39 @@ export default function App() {
     clearActiveSession()
     const isKids = isKidsQuiz(type)
     const isCapital = isCapitalQuiz(type)
+    const isSea = isSeaQuiz(type)
+
+    // For sea quizzes, use sea names
+    if (isSea) {
+      const seaNames = seas.map(s => s.name)
+      const shuffled = shuffleArray(seaNames)
+      const newSessionId = Date.now().toString()
+      const seaTime = type === 'seas-choice' ? 5 * 60 : 10 * 60
+      setSessionId(newSessionId)
+      setQuizType(type)
+      setKidsMode(false)
+      setCurrentQueue(shuffled)
+      setQuizOrder(shuffled)
+      setCurrentIndex(0)
+      setTimeRemaining(seaTime)
+      setQuizStarted(true)
+      setQuizFinished(false)
+      setGaveUp(false)
+      setCorrectFlags(new Set())
+      setSeenFlags(new Set([shuffled[0]]))
+      setResultsTab(null)
+      setStruggledFlags(new Map())
+      setCurrentAttempts([])
+      setInput('')
+      setSelectedOption(null)
+      // Generate options for choice quiz
+      if (type === 'seas-choice' && shuffled.length > 0) {
+        const currentSea = seas.find(s => s.name === shuffled[0])!
+        setCurrentOptions(getSeaQuizOptions(currentSea, seas))
+      }
+      return
+    }
+
     // For kids quizzes, determine country list based on type
     let allCountries: string[]
     if (type === 'kids-europe') {
@@ -713,8 +754,20 @@ export default function App() {
   // All capital names for ambiguity checking
   const allCapitalNames = Object.values(europeanCapitals)
 
+  // For sea quizzes, the correct answer is the Norwegian sea name
+  const currentSea = seas.find(s => s.name === currentCountry)
+  const correctSeaName = currentSea?.norwegianName || ''
+  const seaAltNames = seaAlternativeNames[correctSeaName] || []
+  // All sea Norwegian names for ambiguity checking
+  const allSeaNames = seas.map(s => s.norwegianName)
+
   // Check if value matches the correct answer or any alternative name
   const matchesCorrectAnswer = (value: string): boolean => {
+    // For sea typing quiz, check against sea names
+    if (isSeaTypingQuiz(quizType)) {
+      const result = matchAnswer(value, correctSeaName, allSeaNames, seaAltNames, seaAlternativeNames)
+      return result[0] === 'match'
+    }
     // For capital input quiz, check against capital names
     if (isCapitalInputQuiz(quizType)) {
       const result = matchAnswer(value, correctCapital, allCapitalNames, capitalAltNames, {})
@@ -1026,6 +1079,82 @@ export default function App() {
     }
   }
 
+  // Handle sea choice quiz option selection (selectedSeaName is the English name)
+  const handleSeaChoiceClick = (selectedSeaName: string) => {
+    if (justAnswered) return  // Prevent double-clicks
+
+    setSelectedOption(selectedSeaName)
+    const isCorrect = selectedSeaName === currentCountry
+    setJustAnswered(true)
+
+    if (isCorrect) {
+      // Correct answer
+      const newCorrectFlags = new Set(correctFlags).add(currentCountry)
+      setCorrectFlags(newCorrectFlags)
+
+      // Check if this was the last question
+      const isLastQuestion = currentIndex + 1 >= currentQueue.length &&
+        quizOrder.every(f => newCorrectFlags.has(f))
+
+      setTimeout(() => {
+        if (isLastQuestion) {
+          setQuizFinished(true)
+          setJustAnswered(false)
+        } else {
+          // Get next question and options BEFORE updating state
+          const nextSeaName = currentQueue[currentIndex + 1]
+          const nextSea = seas.find(s => s.name === nextSeaName)!
+          const nextOptions = getSeaQuizOptions(nextSea, seas)
+          // Update all state together
+          setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextSeaName))
+          setCurrentAttempts([])
+        }
+      }, 600)
+    } else {
+      // Wrong answer - track as struggled, show correct answer, then move on
+      setCurrentAttempts(prev => [...prev, selectedSeaName])
+      setStruggledFlags(prev => new Map(prev).set(currentCountry, [...currentAttempts, selectedSeaName]))
+
+      setTimeout(() => {
+        // Get next question and options BEFORE updating state
+        if (currentIndex + 1 < currentQueue.length) {
+          const nextSeaName = currentQueue[currentIndex + 1]
+          const nextSea = seas.find(s => s.name === nextSeaName)!
+          const nextOptions = getSeaQuizOptions(nextSea, seas)
+          // Update all state together
+          setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextSeaName))
+          setCurrentAttempts([])
+        } else {
+          // End of queue - handle round completion
+          const remainingIncorrect = quizOrder.filter(f => !correctFlags.has(f))
+          if (remainingIncorrect.length > 0) {
+            const nextSeaName = remainingIncorrect[0]
+            const nextSea = seas.find(s => s.name === nextSeaName)!
+            const nextOptions = getSeaQuizOptions(nextSea, seas)
+            setCurrentQueue(remainingIncorrect)
+            setCurrentIndex(0)
+            setCurrentOptions(nextOptions)
+            setSelectedOption(null)
+            setJustAnswered(false)
+            setSeenFlags(prev => new Set(prev).add(nextSeaName))
+            setCurrentAttempts([])
+          } else {
+            setQuizFinished(true)
+            setJustAnswered(false)
+          }
+        }
+      }, 1200)  // Longer delay to show correct answer
+    }
+  }
+
   const goBack = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
@@ -1204,6 +1333,35 @@ export default function App() {
           </button>
         </div>
 
+        {/* Sea quiz section */}
+        <h2 className="text-gray-400 text-sm mb-2">Alle verdens hav</h2>
+        <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
+          <button
+            onClick={() => startQuiz('seas-typing')}
+            className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['seas-typing'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['seas-typing'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['seas-typing'].correct}/{highScores['seas-typing'].total}
+              </span>
+            )}
+            Alle verdens hav (skriv)
+            <span className="block text-sm font-normal opacity-90">{seas.length} hav<span className={practiceMode ? ' line-through opacity-50' : ''}> - 10 min</span></span>
+          </button>
+          <button
+            onClick={() => startQuiz('seas-choice')}
+            className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg relative"
+          >
+            {highScores['seas-choice'] && (
+              <span className={`absolute top-1 right-2 text-xs font-normal ${practiceMode ? 'line-through text-white/40' : highScores['seas-choice'].percentage === 100 ? 'text-yellow-300' : 'text-white/70'}`}>
+                ⭐ {highScores['seas-choice'].correct}/{highScores['seas-choice'].total}
+              </span>
+            )}
+            Alle verdens hav (flervalg)
+            <span className="block text-sm font-normal opacity-90">{seas.length} hav<span className={practiceMode ? ' line-through opacity-50' : ''}> - 5 min</span></span>
+          </button>
+        </div>
+
         <h2 className="text-gray-400 text-sm mb-2">Flagg</h2>
         <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-6">
           {flagQuizOptions.map(renderQuizButton)}
@@ -1258,7 +1416,7 @@ export default function App() {
             {completedCount === totalFlags ? 'Gratulerer!' : gaveUp ? 'Ga opp' : !practiceMode ? 'Tiden er ute!' : 'Resultat'}
           </h1>
           <p className="text-gray-400 text-xl mb-4">
-            Du klarte {completedCount} av {totalFlags} {isMapQuiz(quizType) ? 'land' : 'flagg'}
+            Du klarte {completedCount} av {totalFlags} {isSeaQuiz(quizType) ? 'hav' : isMapQuiz(quizType) ? 'land' : 'flagg'}
           </p>
           <button
             onClick={goToStartScreen}
@@ -1328,13 +1486,34 @@ export default function App() {
               // For capital quizzes, show the capital name with the country
               const capitalName = europeanCapitals[country]
 
+              // For sea quizzes, get the sea data
+              const seaData = isSeaQuiz(quizType) ? seas.find(s => s.name === country) : null
+              const seaNorwegianName = seaData?.norwegianName || country
+
               return (
                 <div
                   key={country}
-                  className={`flex flex-col items-center rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform ${bgColor}`}
-                  onClick={() => setSelectedCountryModal(country)}
+                  className={`flex flex-col items-center rounded-lg overflow-hidden ${isSeaQuiz(quizType) ? '' : 'cursor-pointer hover:scale-105'} transition-transform ${bgColor}`}
+                  onClick={() => !isSeaQuiz(quizType) && setSelectedCountryModal(country)}
                 >
-                  {isCapitalQuiz(quizType) ? (
+                  {isSeaQuiz(quizType) && seaData ? (
+                    // Sea quiz: show PrerenderedSeaMap thumbnail
+                    <>
+                      <div className="w-full aspect-video overflow-hidden">
+                        <PrerenderedSeaMap seaName={country} center={seaData.center} zoom={seaData.zoom} width={200} height={112} />
+                      </div>
+                      <div className="px-2 py-2 flex flex-col items-center">
+                        <span className={`text-xs text-center ${textColor}`}>
+                          {seaNorwegianName}
+                        </span>
+                        {isStruggled && attempts && (
+                          <span className="text-xs text-gray-500 text-center mt-1">
+                            Prøvde: {attempts.map(a => seas.find(s => s.name === a)?.norwegianName || a).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : isCapitalQuiz(quizType) ? (
                     // Capital quiz: show flag + country name + capital
                     <>
                       <div className="w-full aspect-[3/2] relative overflow-hidden">
@@ -1472,7 +1651,7 @@ export default function App() {
                 // After seeing all, show total incorrect remaining (updates immediately on correct answer)
                 (() => {
                   const totalIncorrect = quizOrder.filter(f => !correctFlags.has(f)).length
-                  const wrongLabel = isCapitalChoiceQuiz(quizType) ? 'feil' : 'hoppet over'
+                  const wrongLabel = (isCapitalChoiceQuiz(quizType) || isSeaChoiceQuiz(quizType)) ? 'feil' : 'hoppet over'
                   return (
                     <span className={totalIncorrect === 1 ? 'text-gray-400' : 'text-yellow-500'}>
                       {totalIncorrect === 1 ? 'Siste!' : `${totalIncorrect} ${wrongLabel}`}
@@ -1482,8 +1661,10 @@ export default function App() {
               ) : (
                 <>
                   <span className="text-gray-400">{remainingText}</span>
-                  {skippedThisPass > 0 && !isCapitalChoiceQuiz(quizType) && (
-                    <span className="text-yellow-500">{skippedThisPass} hoppet over</span>
+                  {skippedThisPass > 0 && (
+                    <span className="text-yellow-500">
+                      {skippedThisPass} {(isCapitalChoiceQuiz(quizType) || isSeaChoiceQuiz(quizType)) ? 'feil' : 'hoppet over'}
+                    </span>
                   )}
                 </>
               )}
@@ -1491,7 +1672,34 @@ export default function App() {
           </div>
         </div>
 
-        {isCapitalInputQuiz(quizType) ? (
+        {isSeaTypingQuiz(quizType) ? (
+          /* Sea typing quiz: SeaMap display */
+          (() => {
+            const currentSea = seas.find(s => s.name === currentCountry)
+            if (!currentSea) return null
+            return (
+              <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 typing-quiz-question ${justAnswered ? 'typing-quiz-question-answered' : ''}`}>
+                <div className="aspect-video mb-2 rounded-lg overflow-hidden">
+                  <PrerenderedSeaMap seaName={currentCountry} center={currentSea.center} zoom={currentSea.zoom} width={672} height={378} />
+                </div>
+              </div>
+            )
+          })()
+        ) : isSeaChoiceQuiz(quizType) ? (
+          /* Sea choice quiz: PrerenderedSeaMap with question text */
+          (() => {
+            const currentSea = seas.find(s => s.name === currentCountry)
+            if (!currentSea) return null
+            return (
+              <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] mb-6 sm:mb-8 animate-scale-in ${justAnswered ? (selectedOption === currentCountry ? 'quiz-question-fade-correct' : 'quiz-question-fade-wrong') : ''}`}>
+                <div className="aspect-video mb-2 rounded-lg overflow-hidden">
+                  <PrerenderedSeaMap seaName={currentCountry} center={currentSea.center} zoom={currentSea.zoom} width={672} height={378} />
+                </div>
+                <p className="text-gray-400 text-sm text-center mt-2">Hvilket hav eller sjø er dette?</p>
+              </div>
+            )
+          })()
+        ) : isCapitalInputQuiz(quizType) ? (
           /* Capital input quiz: Map with flag overlay + country name as question */
           <div key={currentCountry} className={`w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 typing-quiz-question ${justAnswered ? 'typing-quiz-question-answered' : ''}`}>
             <div className="relative aspect-video mb-3 rounded-lg overflow-hidden">
@@ -1542,7 +1750,76 @@ export default function App() {
           </div>
         )}
 
-        {isCapitalInputQuiz(quizType) ? (
+        {isSeaTypingQuiz(quizType) ? (
+          /* Sea typing quiz: Text input for sea name */
+          <>
+            <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">
+              <input
+                ref={inputRef}
+                type="text"
+                value={justAnswered ? correctSeaName : input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Skriv havets navn..."
+                className={`w-full text-white rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg lg:text-xl focus:outline-none transition-colors duration-150 border-2 ${
+                  justAnswered
+                    ? 'bg-green-600 border-green-500 font-bold input-success'
+                    : 'bg-gray-900 border-gray-700 focus:border-blue-500'
+                }`}
+                autoComplete="off"
+                autoCapitalize="off"
+                readOnly={justAnswered}
+              />
+            </div>
+
+            <button
+              onClick={skipFlag}
+              disabled={justAnswered}
+              className="w-full max-w-4xl w-[95vw] bg-gray-700 hover:bg-gray-600 disabled:hover:bg-gray-700 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded-lg mb-2 sm:mb-3 text-sm sm:text-base lg:text-lg"
+            >
+              Hopp over <span className="text-gray-400 text-xs sm:text-sm">(Tab / Shift+Tab tilbake)</span>
+            </button>
+          </>
+        ) : isSeaChoiceQuiz(quizType) ? (
+          /* Sea choice quiz: 4 text buttons with Norwegian sea names */
+          <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {currentOptions.map((norwegianName, idx) => {
+              // Find the sea by Norwegian name to get its English name for comparison
+              const seaData = seas.find(s => s.norwegianName === norwegianName)
+              const seaEnglishName = seaData?.name || norwegianName
+              const isSelected = selectedOption === seaEnglishName
+              const isCorrectOption = seaEnglishName === currentCountry
+              const wasWrongAnswer = justAnswered && selectedOption && selectedOption !== currentCountry
+
+              let buttonClass = 'bg-gray-800 hover:bg-gray-700'
+              if (justAnswered) {
+                if (isSelected && isCorrectOption) {
+                  buttonClass = 'bg-green-600'
+                } else if (isSelected && !isCorrectOption) {
+                  buttonClass = 'bg-red-600'
+                } else if (wasWrongAnswer && isCorrectOption) {
+                  buttonClass = 'bg-green-600'
+                }
+              }
+
+              const delayClass = `animate-delay-${idx + 1}`
+              const feedbackClass = justAnswered
+                ? (isSelected || isCorrectOption ? 'quiz-option-selected' : 'quiz-option-unselected')
+                : ''
+
+              return (
+                <button
+                  key={`${currentCountry}-${norwegianName}`}
+                  onClick={() => handleSeaChoiceClick(seaEnglishName)}
+                  disabled={justAnswered}
+                  className={`${buttonClass} text-white font-bold py-4 px-4 rounded-xl text-lg animate-fade-in ${delayClass} ${feedbackClass} quiz-option-hover`}
+                >
+                  {norwegianName}
+                </button>
+              )
+            })}
+          </div>
+        ) : isCapitalInputQuiz(quizType) ? (
           /* Capital input quiz: Text input for capital name */
           <>
             <div className="w-full max-w-4xl w-[95vw] mb-2 sm:mb-4">

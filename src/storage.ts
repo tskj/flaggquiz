@@ -6,6 +6,7 @@ export type QuizType =
   | 'map-world' | 'map-europe' | 'map-africa' | 'map-asia' | 'map-north-america' | 'map-south-america' | 'map-oceania' | 'map-territories'
   | 'kids-europe' | 'kids-map-europe' | 'kids-world' | 'kids-map-world'
   | 'capital-input-europe' | 'capital-choice-europe'
+  | 'seas-typing' | 'seas-choice'
 
 export const isMapQuiz = (type: QuizType): boolean => type.startsWith('map-') || type === 'kids-map-europe' || type === 'kids-map-world'
 export const isKidsQuiz = (type: QuizType): boolean => type.startsWith('kids-')
@@ -14,6 +15,9 @@ export const isKidsMapQuiz = (type: QuizType): boolean => type === 'kids-map-eur
 export const isCapitalQuiz = (type: QuizType): boolean => type.startsWith('capital-')
 export const isCapitalInputQuiz = (type: QuizType): boolean => type === 'capital-input-europe'
 export const isCapitalChoiceQuiz = (type: QuizType): boolean => type === 'capital-choice-europe'
+export const isSeaQuiz = (type: QuizType): boolean => type.startsWith('seas-')
+export const isSeaTypingQuiz = (type: QuizType): boolean => type === 'seas-typing'
+export const isSeaChoiceQuiz = (type: QuizType): boolean => type === 'seas-choice'
 export const getBaseQuizType = (type: QuizType): QuizType =>
   type.startsWith('map-') ? type.replace('map-', '') as QuizType :
   type === 'kids-map-europe' ? 'europe' as QuizType :
@@ -32,7 +36,8 @@ export const QuizSessionSchema = z.object({
     'world', 'europe', 'africa', 'asia', 'north-america', 'south-america', 'oceania', 'territories',
     'map-world', 'map-europe', 'map-africa', 'map-asia', 'map-north-america', 'map-south-america', 'map-oceania', 'map-territories',
     'kids-europe', 'kids-map-europe', 'kids-world', 'kids-map-world',
-    'capital-input-europe', 'capital-choice-europe'
+    'capital-input-europe', 'capital-choice-europe',
+    'seas-typing', 'seas-choice'
   ]).default('world'),
 
   // Quiz configuration
@@ -152,6 +157,8 @@ export function getHighScores(): Record<QuizType, HighScore | null> {
     'kids-map-world': null,
     'capital-input-europe': null,
     'capital-choice-europe': null,
+    'seas-typing': null,
+    'seas-choice': null,
   }
 
   for (const session of history.sessions) {

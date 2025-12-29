@@ -3,6 +3,7 @@ dist
 .DS_Store
 public/maps
 public/flags
+public/sea-maps
 src/localFlags.json
 src/localTerritoryFlags.json
 src/capitalScreenPositions.json
