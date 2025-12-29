@@ -17,10 +17,49 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const OUTPUT_DIR = path.join(__dirname, '..', 'public', 'sea-maps')
+const SEA_BOUNDARIES_FILE = path.join(__dirname, '..', 'public', 'sea-boundaries.json')
 
 // Colors matching the country map quiz theme (from mapRenderer.ts)
 const OCEAN_COLOR = '#1a3a5c'
 const LAND_COLOR = '#2d2d44'  // Same as NEIGHBOR_COLOR in country maps
+const HIGHLIGHT_COLOR = '#3a8fbf'  // Lighter blue for sea highlight
+
+// Type for sea boundary geometries
+type SeaBoundaryGeometry = {
+  type: 'Polygon' | 'MultiPolygon'
+  coordinates: number[][][] | number[][][][]
+}
+type SeaBoundaries = Record<string, SeaBoundaryGeometry>
+
+// Simplify coordinates by keeping every Nth point
+function simplifyCoords(coords: number[][], factor: number): number[][] {
+  if (coords.length <= 10) return coords
+  const result: number[][] = []
+  for (let i = 0; i < coords.length; i += factor) {
+    result.push(coords[i])
+  }
+  // Ensure the polygon closes properly
+  if (result.length > 0 && result[result.length - 1] !== coords[coords.length - 1]) {
+    result.push(coords[coords.length - 1])
+  }
+  return result
+}
+
+function simplifyGeometry(geom: SeaBoundaryGeometry, factor: number = 10): SeaBoundaryGeometry {
+  if (geom.type === 'Polygon') {
+    return {
+      type: 'Polygon',
+      coordinates: (geom.coordinates as number[][][]).map(ring => simplifyCoords(ring, factor))
+    }
+  } else {
+    return {
+      type: 'MultiPolygon',
+      coordinates: (geom.coordinates as number[][][][]).map(polygon =>
+        polygon.map(ring => simplifyCoords(ring, factor))
+      )
+    }
+  }
+}
 
 // Sea data (copied from seasData.ts to avoid import issues)
 interface SeaData {
@@ -89,7 +128,8 @@ function renderSeaMapSVG(
   zoom: number,
   width: number,
   height: number,
-  scaleFactor: number
+  scaleFactor: number,
+  seaBoundary?: SeaBoundaryGeometry
 ): string {
   const w = width * scaleFactor
   const h = height * scaleFactor
@@ -109,8 +149,45 @@ function renderSeaMapSVG(
 
   // Generate SVG
   let svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">`
+
+  // Define filters and gradients
+  svg += `<defs>`
+  // Gaussian blur filter for diffuse glow effect
+  svg += `<filter id="seaGlow" x="-50%" y="-50%" width="200%" height="200%">`
+  svg += `<feGaussianBlur in="SourceGraphic" stdDeviation="${15 * scaleFactor}" result="blur"/>`
+  svg += `<feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.6 0"/>`
+  svg += `</filter>`
+  // Fallback radial gradient for seas without boundaries
+  svg += `<radialGradient id="seaHighlight" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">`
+  svg += `<stop offset="0%" style="stop-color:${HIGHLIGHT_COLOR};stop-opacity:0.4"/>`
+  svg += `<stop offset="70%" style="stop-color:${HIGHLIGHT_COLOR};stop-opacity:0.15"/>`
+  svg += `<stop offset="100%" style="stop-color:${HIGHLIGHT_COLOR};stop-opacity:0"/>`
+  svg += `</radialGradient>`
+  svg += `</defs>`
+
+  // Background ocean
   svg += `<rect width="${w}" height="${h}" fill="${OCEAN_COLOR}"/>`
 
+  // Render sea boundary highlight if available
+  if (seaBoundary) {
+    // Create a GeoJSON feature from the boundary geometry
+    const boundaryFeature = {
+      type: 'Feature' as const,
+      geometry: seaBoundary,
+      properties: {}
+    }
+    const boundaryPath = pathGenerator(boundaryFeature as Feature<MultiPolygon | Polygon>)
+    if (boundaryPath) {
+      // Render with blur filter for diffuse glow effect
+      svg += `<path d="${boundaryPath}" fill="${HIGHLIGHT_COLOR}" filter="url(#seaGlow)"/>`
+    }
+  } else {
+    // Fallback to ellipse for seas without boundaries (e.g., Caspian Sea)
+    const highlightRadius = Math.min(w, h) * 0.4
+    svg += `<ellipse cx="${w/2}" cy="${h/2}" rx="${highlightRadius}" ry="${highlightRadius * 0.8}" fill="url(#seaHighlight)"/>`
+  }
+
+  // Render land masses on top
   for (const feature of features) {
     const pathData = pathGenerator(feature)
     if (pathData) {
@@ -166,19 +243,35 @@ async function main() {
 
   console.log(`Loaded ${features.length} country features (filtered from ${geoData10m.features.length})`)
 
+  // Load sea boundaries (from Marine Regions IHO data)
+  let seaBoundaries: SeaBoundaries = {}
+  try {
+    const boundariesData = await fs.readFile(SEA_BOUNDARIES_FILE, 'utf-8')
+    seaBoundaries = JSON.parse(boundariesData) as SeaBoundaries
+    console.log(`Loaded ${Object.keys(seaBoundaries).length} sea boundaries`)
+  } catch {
+    console.log('No sea boundaries file found, using fallback highlights')
+  }
+
   // Ensure output directory exists
   await fs.mkdir(OUTPUT_DIR, { recursive: true })
 
   console.log(`\nGenerating maps for ${seas.length} seas...`)
 
   let generated = 0
+  let withBoundaries = 0
 
   for (const sea of seas) {
     // Sanitize name for filename
     const safeName = sea.name.replace(/[^a-zA-Z0-9-]/g, '_')
 
+    // Get sea boundary if available (simplified to reduce SVG size)
+    const rawBoundary = seaBoundaries[sea.name]
+    const seaBoundary = rawBoundary ? simplifyGeometry(rawBoundary, 20) : undefined
+    if (seaBoundary) withBoundaries++
+
     for (const { width, height } of SIZES) {
-      const svg = renderSeaMapSVG(features, sea.center, sea.zoom, width, height, SCALE_FACTOR)
+      const svg = renderSeaMapSVG(features, sea.center, sea.zoom, width, height, SCALE_FACTOR, seaBoundary)
       const outputPath = path.join(OUTPUT_DIR, `${safeName}-${width}x${height}.png`)
       await svgToPng(svg, outputPath)
     }
@@ -191,7 +284,7 @@ async function main() {
     }
   }
 
-  console.log(`\nDone! Generated maps for ${generated} seas`)
+  console.log(`\nDone! Generated maps for ${generated} seas (${withBoundaries} with IHO boundaries, ${generated - withBoundaries} with fallback)`)
   console.log(`Output directory: ${OUTPUT_DIR}`)
 }
 
