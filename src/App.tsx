@@ -1464,12 +1464,12 @@ export default function App() {
           </button>
         </div>
 
-        <div className="flex items-center max-w-4xl mx-auto w-full mb-4 gap-2">
-          {/* Left spacer - shrinks to allow tabs to shift left when needed */}
-          <div className="shrink basis-[44px] sm:basis-[120px] min-w-0" />
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center max-w-4xl mx-auto w-full mb-4">
+          {/* Empty left column for centering balance */}
+          <div />
 
-          {/* Tab buttons - don't shrink */}
-          <div className="flex shrink-0">
+          {/* Center column with tabs - truly centered */}
+          <div className="flex">
             <button
               onClick={() => setResultsTab('wrong')}
               className={`px-4 py-2 rounded-l-lg ${activeTab === 'wrong' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
@@ -1490,17 +1490,19 @@ export default function App() {
             </button>
           </div>
 
-          {/* Retry button - doesn't shrink */}
-          <button
-            onClick={() => startQuiz(quizType)}
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg flex items-center gap-2"
-            title="Prøv igjen"
-          >
-            <svg className="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span className="hidden sm:inline">Prøv igjen</span>
-          </button>
+          {/* Right column with retry button */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => startQuiz(quizType)}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg flex items-center gap-2"
+              title="Prøv igjen"
+            >
+              <svg className="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="hidden sm:inline">Prøv igjen</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
