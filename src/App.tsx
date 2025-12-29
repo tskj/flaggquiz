@@ -951,12 +951,24 @@ export default function App() {
         if (isLastFlag) {
           setQuizFinished(true)
           setJustAnswered(false)
-        } else {
+        } else if (currentIndex + 1 < currentQueue.length) {
           // Get next flag and options BEFORE updating state
           const nextFlag = currentQueue[currentIndex + 1]
           const nextOptions = getOptionsForCountry(nextFlag)
           // Update all state together
           setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextFlag))
+          setCurrentAttempts([])
+        } else {
+          // End of queue but still have incorrect flags - loop back
+          const remainingIncorrect = quizOrder.filter(f => !newCorrectFlags.has(f))
+          const nextFlag = remainingIncorrect[0]
+          const nextOptions = getOptionsForCountry(nextFlag)
+          setCurrentQueue(remainingIncorrect)
+          setCurrentIndex(0)
           setCurrentOptions(nextOptions)
           setSelectedOption(null)
           setJustAnswered(false)
@@ -1024,12 +1036,25 @@ export default function App() {
         if (isLastQuestion) {
           setQuizFinished(true)
           setJustAnswered(false)
-        } else {
+        } else if (currentIndex + 1 < currentQueue.length) {
           // Get next question and options BEFORE updating state
           const nextCountry = currentQueue[currentIndex + 1]
           const nextOptions = getQuizOptions(nextCountry, quizOrder)
           // Update all state together
           setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setCapitalChoiceTypes(generateCapitalChoiceTypes())
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextCountry))
+          setCurrentAttempts([])
+        } else {
+          // End of queue but still have incorrect flags - loop back
+          const remainingIncorrect = quizOrder.filter(f => !newCorrectFlags.has(f))
+          const nextCountry = remainingIncorrect[0]
+          const nextOptions = getQuizOptions(nextCountry, quizOrder)
+          setCurrentQueue(remainingIncorrect)
+          setCurrentIndex(0)
           setCurrentOptions(nextOptions)
           setCapitalChoiceTypes(generateCapitalChoiceTypes())
           setSelectedOption(null)
@@ -1100,13 +1125,26 @@ export default function App() {
         if (isLastQuestion) {
           setQuizFinished(true)
           setJustAnswered(false)
-        } else {
+        } else if (currentIndex + 1 < currentQueue.length) {
           // Get next question and options BEFORE updating state
           const nextSeaName = currentQueue[currentIndex + 1]
           const nextSea = seas.find(s => s.name === nextSeaName)!
           const nextOptions = getSeaQuizOptions(nextSea, seas)
           // Update all state together
           setCurrentIndex(currentIndex + 1)
+          setCurrentOptions(nextOptions)
+          setSelectedOption(null)
+          setJustAnswered(false)
+          setSeenFlags(prev => new Set(prev).add(nextSeaName))
+          setCurrentAttempts([])
+        } else {
+          // End of queue but still have incorrect flags - loop back
+          const remainingIncorrect = quizOrder.filter(f => !newCorrectFlags.has(f))
+          const nextSeaName = remainingIncorrect[0]
+          const nextSea = seas.find(s => s.name === nextSeaName)!
+          const nextOptions = getSeaQuizOptions(nextSea, seas)
+          setCurrentQueue(remainingIncorrect)
+          setCurrentIndex(0)
           setCurrentOptions(nextOptions)
           setSelectedOption(null)
           setJustAnswered(false)
