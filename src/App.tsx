@@ -1426,8 +1426,12 @@ export default function App() {
           </button>
         </div>
 
-        <div className="relative max-w-4xl mx-auto w-full mb-4">
-          <div className="flex justify-center">
+        <div className="flex items-center max-w-4xl mx-auto w-full mb-4 gap-2">
+          {/* Left spacer - shrinks to allow tabs to shift left when needed */}
+          <div className="shrink basis-[44px] sm:basis-[120px] min-w-0" />
+
+          {/* Tab buttons - don't shrink */}
+          <div className="flex shrink-0">
             <button
               onClick={() => setResultsTab('wrong')}
               className={`px-4 py-2 rounded-l-lg ${activeTab === 'wrong' ? 'bg-gray-700 text-white' : 'bg-gray-900 text-gray-400'}`}
@@ -1447,9 +1451,11 @@ export default function App() {
               Alle ({totalFlags})
             </button>
           </div>
+
+          {/* Retry button - doesn't shrink */}
           <button
             onClick={() => startQuiz(quizType)}
-            className="absolute right-0 top-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg flex items-center gap-2"
+            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 sm:px-4 rounded-lg flex items-center gap-2"
             title="Prøv igjen"
           >
             <svg className="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
