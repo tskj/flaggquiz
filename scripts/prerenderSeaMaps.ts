@@ -75,7 +75,7 @@ const seas: SeaData[] = [
   { name: 'Atlantic Ocean', norwegianName: 'Atlanterhavet', center: [-30, 0], zoom: 0.5 },
   { name: 'Indian Ocean', norwegianName: 'Indiahavet', center: [75, -20], zoom: 0.6 },
   { name: 'Arctic Ocean', norwegianName: 'Nordishavet', center: [0, 85], zoom: 0.8 },
-  { name: 'Southern Ocean', norwegianName: 'Sydishavet', center: [0, -65], zoom: 0.6 },
+  { name: 'Southern Ocean', norwegianName: 'Sørishavet', center: [0, -65], zoom: 0.6 },
 
   // European Seas
   { name: 'Mediterranean Sea', norwegianName: 'Middelhavet', center: [18, 35], zoom: 1.5 },
