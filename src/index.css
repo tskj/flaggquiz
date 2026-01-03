@@ -72,9 +72,12 @@ html, body {
   cursor: pointer;
 }
 
-.quiz-option-hover:hover:not(:disabled) {
-  transform: scale(1.04);
-  filter: brightness(1.3);
+/* Only apply hover effects on devices that support hover (not touch) */
+@media (hover: hover) {
+  .quiz-option-hover:hover:not(:disabled) {
+    transform: scale(1.04);
+    filter: brightness(1.3);
+  }
 }
 
 .quiz-option-hover:active:not(:disabled) {
