@@ -831,6 +831,25 @@ export default function App() {
             }
             if (currentMatch) break
           }
+        } else if (isSeaTypingQuiz(quizType)) {
+          // For sea quiz, check against sea names
+          for (const sea of seas) {
+            if (sea.name === currentCountry) continue
+            // Check Norwegian name
+            if (isStrictMatch(value, sea.norwegianName)) {
+              currentMatch = sea.name  // Store English name for lookup
+              break
+            }
+            // Also check alternative names
+            const seaAltNamesForSea = seaAlternativeNames[sea.norwegianName] || []
+            for (const alt of seaAltNamesForSea) {
+              if (isStrictMatch(value, alt)) {
+                currentMatch = sea.name
+                break
+              }
+            }
+            if (currentMatch) break
+          }
         } else {
           // For other quizzes, check against country names
           for (const country of Object.keys(currentFlags)) {
@@ -1587,7 +1606,9 @@ export default function App() {
                         </span>
                         {isStruggled && attempts && (
                           <span className="text-xs text-gray-500 text-center mt-1">
-                            Prøvde: {attempts.join(', ')}
+                            Prøvde: {isCapitalChoiceQuiz(quizType)
+                              ? attempts.map(c => getQuizName(c)).join(', ')
+                              : attempts.join(', ')}
                           </span>
                         )}
                       </div>
