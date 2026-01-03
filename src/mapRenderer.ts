@@ -10,7 +10,7 @@ export const NEIGHBOR_COLOR = '#2d2d44'
 export const COUNTRY_COLOR = '#4ade80'
 
 // Countries where insets don't make sense - just show everything in the main view
-export const countriesWithoutInsets = ['Bahamas', 'Canada', 'Denmark', 'Solomon Islands', 'Marshall Islands', 'Kiribati']
+export const countriesWithoutInsets = ['Bahamas', 'Canada', 'Denmark', 'Solomon Islands', 'Marshall Islands', 'Kiribati', 'Malaysia']
 
 // Small island nations that need extra zoom (spread out but tiny land area)
 export const countriesNeedingExtraZoom: Record<string, number> = {
