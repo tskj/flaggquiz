@@ -347,6 +347,7 @@ export default function App() {
   const [quizOrder, setQuizOrder] = useState<string[]>([])
   const [correctFlags, setCorrectFlags] = useState<Set<string>>(new Set())
   const [seenFlags, setSeenFlags] = useState<Set<string>>(new Set())  // All flags ever shown (only grows)
+  const [firstPassComplete, setFirstPassComplete] = useState(false)
   const [resultsTab, setResultsTab] = useState<'wrong' | 'practice' | 'all' | null>(null)
   const [struggledFlags, setStruggledFlags] = useState<Map<string, string[]>>(new Map())
   const [currentAttempts, setCurrentAttempts] = useState<string[]>([])
@@ -492,6 +493,7 @@ export default function App() {
       // If round > 1, all flags have been seen; otherwise, it's correct + skipped + current queue up to index
       if (saved.round > 1) {
         setSeenFlags(new Set(saved.quizOrder))
+        setFirstPassComplete(true)
       } else {
         const seen = new Set([
           ...saved.correctFlags,
@@ -499,6 +501,7 @@ export default function App() {
           ...saved.currentQueue.slice(0, saved.currentIndex)
         ])
         setSeenFlags(seen)
+        setFirstPassComplete(false)
       }
       // Mark if already finished to avoid duplicate history entries on refresh
       if (saved.finishedAt) {
@@ -667,6 +670,7 @@ export default function App() {
       setGaveUp(false)
       setCorrectFlags(new Set())
       setSeenFlags(new Set([shuffled[0]]))
+      setFirstPassComplete(false)
       setResultsTab(null)
       setStruggledFlags(new Map())
       setCurrentAttempts([])
@@ -719,6 +723,7 @@ export default function App() {
     setGaveUp(false)
     setCorrectFlags(new Set())
     setSeenFlags(new Set([shuffled[0]]))  // First flag is immediately seen
+    setFirstPassComplete(false)
     setResultsTab(null)
     setStruggledFlags(new Map())
     setCurrentAttempts([])
@@ -800,7 +805,7 @@ export default function App() {
         if (isLastFlag) {
           setQuizFinished(true)
         } else {
-          moveToNext(false)
+          moveToNext(false, newCorrectFlags)
         }
       }, 400)
     } else {
@@ -879,7 +884,7 @@ export default function App() {
     }
   }
 
-  const skipFlag = () => moveToNext(true)
+  const skipFlag = () => moveToNext(true, correctFlags)
 
   const giveUp = () => {
     saveCurrentAttempts()
@@ -894,7 +899,7 @@ export default function App() {
     setSessionId(null)
   }
 
-  const moveToNext = (_wasSkipped: boolean) => {
+  const moveToNext = (_wasSkipped: boolean, currentCorrectFlags: Set<string>) => {
     saveCurrentAttempts()
 
     if (currentIndex + 1 < currentQueue.length) {
@@ -909,7 +914,9 @@ export default function App() {
       }
     } else {
       // End of current pass - check for remaining incorrect flags
-      const remainingIncorrect = quizOrder.filter(f => !correctFlags.has(f))
+      // Use the passed-in currentCorrectFlags to avoid stale closure issues
+      setFirstPassComplete(true)
+      const remainingIncorrect = quizOrder.filter(f => !currentCorrectFlags.has(f))
       if (remainingIncorrect.length > 0) {
         // Start new pass with remaining flags (in original order)
         setCurrentQueue(remainingIncorrect)
@@ -1680,9 +1687,6 @@ export default function App() {
   const skippedThisPass = currentQueue.slice(0, currentIndex).filter(f => !correctFlags.has(f)).length
   const quizTypeName = getQuizTypeName(quizType)
 
-  // Build the remaining text (used before hasSeenAll)
-  const remainingText = remainingIncludingCurrent === 1 ? 'Siste!' : `${remainingIncludingCurrent} igjen`
-
   return (
     <div className="min-h-screen flex flex-col p-2 sm:p-4" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0f0f1a 70%)' }}>
       <div className="flex-1 flex flex-col items-center pt-1 sm:pt-4 lg:pt-8">
@@ -1694,27 +1698,34 @@ export default function App() {
           <div className="flex justify-between items-center text-xs sm:text-sm lg:text-base">
             <span className="text-gray-500">{quizTypeName}</span>
             <div className="flex gap-2 sm:gap-4">
-              {hasSeenAll ? (
-                // After seeing all, show total incorrect remaining (updates immediately on correct answer)
-                (() => {
-                  const totalIncorrect = quizOrder.filter(f => !correctFlags.has(f)).length
-                  const wrongLabel = (isCapitalChoiceQuiz(quizType) || isSeaChoiceQuiz(quizType)) ? 'feil' : 'hoppet over'
+              {(() => {
+                const isLastInQueue = remainingIncludingCurrent === 1
+                const totalIncorrect = quizOrder.filter(f => !correctFlags.has(f)).length
+                const wrongLabel = (isCapitalChoiceQuiz(quizType) || isSeaChoiceQuiz(quizType)) ? 'feil' : 'hoppet over'
+
+                // First pass: show remaining count, "Siste!" on last item, and skipped separately
+                // After first pass: just show total incorrect remaining (no "Siste!", no duplicate)
+                if (!firstPassComplete) {
                   return (
-                    <span className={totalIncorrect === 1 ? 'text-gray-400' : 'text-yellow-500'}>
-                      {totalIncorrect === 1 ? 'Siste!' : `${totalIncorrect} ${wrongLabel}`}
+                    <>
+                      <span className="text-gray-400">
+                        {isLastInQueue ? 'Siste!' : `${remainingIncludingCurrent} igjen`}
+                      </span>
+                      {skippedThisPass > 0 && (
+                        <span className="text-yellow-500">
+                          {skippedThisPass} {wrongLabel}
+                        </span>
+                      )}
+                    </>
+                  )
+                } else {
+                  return (
+                    <span className="text-yellow-500">
+                      {totalIncorrect} {wrongLabel}
                     </span>
                   )
-                })()
-              ) : (
-                <>
-                  <span className="text-gray-400">{remainingText}</span>
-                  {skippedThisPass > 0 && (
-                    <span className="text-yellow-500">
-                      {skippedThisPass} {(isCapitalChoiceQuiz(quizType) || isSeaChoiceQuiz(quizType)) ? 'feil' : 'hoppet over'}
-                    </span>
-                  )}
-                </>
-              )}
+                }
+              })()}
             </div>
           </div>
         </div>
