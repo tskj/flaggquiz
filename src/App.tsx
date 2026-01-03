@@ -1424,8 +1424,9 @@ export default function App() {
       !correctFlags.has(country) || struggledFlags.has(country)
     )
 
-    // Default tab: if got less than 30% right, show "all" to avoid cluttered wrong view
-    const defaultTab: 'wrong' | 'practice' | 'all' = correctFlags.size < totalFlags * 0.3 ? 'all' : 'practice'
+    // Default tab: show "all" if perfect score (nothing to practice) or less than 30% right
+    const defaultTab: 'wrong' | 'practice' | 'all' =
+      practiceFlags.length === 0 || correctFlags.size < totalFlags * 0.3 ? 'all' : 'practice'
     // Use user selection if set, otherwise use computed default
     const activeTab = resultsTab ?? defaultTab
 
